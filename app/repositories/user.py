@@ -2,10 +2,12 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.schemas.announcement import AnnouncementAudience
+from app.schemas.user import SystemRole
 from app.utils import utc_now
 
 
@@ -177,3 +179,47 @@ async def delete_user(session: AsyncSession, db_user: User) -> None:
     """Hard-delete a user and commit. Caller owns the detach before calling."""
     await session.delete(db_user)
     await session.commit()
+
+
+def _apply_audience(
+    statement: Select, audience: AnnouncementAudience, role: SystemRole | None
+) -> Select:
+    """Apply the audience/role WHERE clause shared by the target resolvers."""
+    if audience == AnnouncementAudience.ACTIVE:
+        return statement.where(User.is_active.is_(True))
+    if audience == AnnouncementAudience.ROLE:
+        return statement.where(User.role == role)
+    return statement
+
+
+async def get_target_user_ids(
+    session: AsyncSession,
+    *,
+    audience: AnnouncementAudience,
+    role: SystemRole | None = None,
+) -> Sequence[uuid.UUID]:
+    """Return the ids of users a broadcast targets for the given audience.
+
+    ``all`` covers every user, ``active`` only active accounts, and ``role``
+    only users holding ``role``. Returns ids only (not full rows) so the caller
+    can fan out notifications cheaply over large audiences.
+    """
+    statement = _apply_audience(select(User.id), audience, role)
+    result = await session.execute(statement)
+    return result.scalars().all()
+
+
+async def get_target_user_emails(
+    session: AsyncSession,
+    *,
+    audience: AnnouncementAudience,
+    role: SystemRole | None = None,
+) -> Sequence[tuple[uuid.UUID, str]]:
+    """Return (id, email) pairs of a broadcast's target users, for email fan-out.
+
+    Same audience filter as ``get_target_user_ids``; the id rides along so the
+    email job can set a per-recipient bounce address.
+    """
+    statement = _apply_audience(select(User.id, User.email), audience, role)
+    result = await session.execute(statement)
+    return [(row[0], row[1]) for row in result.all()]

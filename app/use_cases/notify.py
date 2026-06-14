@@ -6,6 +6,7 @@ call, mirroring ``log_activity``.
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,3 +50,45 @@ async def notify(
         ),
     )
     return notification
+
+
+CHUNK_SIZE = 500
+
+
+async def notify_many(
+    session: AsyncSession,
+    *,
+    user_ids: Sequence[uuid.UUID],
+    notification_type: NotificationType,
+    data: dict[str, JsonValue] | None = None,
+    chunk_size: int = CHUNK_SIZE,
+) -> int:
+    """Persist one notification per user id and push it over each user's feed.
+
+    Inserts in fixed-size chunks (one commit per chunk) so a large fan-out stays
+    within DB parameter/memory limits. All recipients get the same payload — the
+    language is resolved at render time — so the rows are cheap to build. The
+    realtime publish per recipient is best-effort. Returns the number created.
+    """
+    ids = list(user_ids)
+    payload = data or {}
+    created = 0
+    for start in range(0, len(ids), chunk_size):
+        chunk = ids[start : start + chunk_size]
+        notifications = [
+            Notification(user_id=uid, type=notification_type.value, data=payload)
+            for uid in chunk
+        ]
+        session.add_all(notifications)
+        await session.commit()
+
+        for notification in notifications:
+            await publish_safe(
+                notifications_topic(notification.user_id),
+                NotificationRealtimeEvent(
+                    type=NotificationEventType.NOTIFICATION_CREATED,
+                    notification=NotificationRead.model_validate(notification),
+                ),
+            )
+        created += len(notifications)
+    return created

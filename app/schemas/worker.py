@@ -18,3 +18,11 @@ class SessionPurgeJobResult(BaseModel):
 
     purged: int = Field(ge=0, description="Session rows deleted this run.")
     duration_ms: int = Field(ge=0, description="Total wall-clock time in ms.")
+
+
+class BroadcastEmailJobResult(BaseModel):
+    """Outcome of a single broadcast-email fan-out job."""
+
+    sent: int = Field(ge=0, description="Emails successfully sent this run.")
+    failed: int = Field(ge=0, description="Emails that failed to send.")
+    duration_ms: int = Field(ge=0, description="Total wall-clock time in ms.")

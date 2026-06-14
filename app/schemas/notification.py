@@ -17,6 +17,7 @@ class NotificationType(StrEnum):
     SUPPORT_TICKET_REPLIED = "support_ticket_replied"
     SUPPORT_TICKET_STATUS_CHANGED = "support_ticket_status_changed"
     ADMIN_PERMISSIONS_CHANGED = "admin_permissions_changed"
+    ADMIN_ANNOUNCEMENT = "admin_announcement"
 
 
 class NotificationRead(BaseModel):

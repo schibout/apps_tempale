@@ -76,3 +76,9 @@ class ErrorMessages:
     ATTACHMENT_NOT_OWNED = "error.support.attachment_not_owned"
     ATTACHMENT_WRONG_CATEGORY = "error.support.attachment_wrong_category"
     INVALID_ASSIGNED_ADMIN = "error.support.invalid_assigned_admin"
+
+    # Announcements / broadcast
+    ANNOUNCEMENT_NOT_FOUND = "error.announcement.not_found"
+    ANNOUNCEMENT_TEMPLATE_NOT_FOUND = "error.announcement.template_not_found"
+    ANNOUNCEMENT_INVALID_CONTENT = "error.announcement.invalid_content"
+    ANNOUNCEMENT_INVALID_AUDIENCE = "error.announcement.invalid_audience"

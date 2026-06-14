@@ -1,4 +1,5 @@
 from app.models.admin_permission import AdminPermission
+from app.models.announcement import Announcement
 from app.models.file import File
 from app.models.notification import Notification
 from app.models.support import (
@@ -12,6 +13,7 @@ from app.models.user_session import UserSession
 
 __all__ = [
     "AdminPermission",
+    "Announcement",
     "File",
     "Notification",
     "SupportMessage",

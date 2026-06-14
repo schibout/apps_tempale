@@ -89,7 +89,7 @@ api → services → repositories → models
 - `services/` → All business logic. Receives session as argument. May raise `HTTPException` directly.
 - `repositories/` → All DB queries. No business rules. Receives session as argument.
 - `models/` → SQLAlchemy ORM definitions only. No logic.
-- `schemas/` → Pydantic DTOs. Separate `Create`, `Update`, `Response` per domain.
+- `schemas/` → Pydantic DTOs **at the API boundary** (request/response). Separate `Create`, `Update`, `Response` per domain. Data that never crosses the API (internal value objects passed between layers) uses a plain `@dataclass`, not a Pydantic schema — e.g. `core/broadcast_templates.py:RenderedContent`, `services/admin/broadcast_email.py:BroadcastEmail`.
 - `core/` → Config, JWT auth, bcrypt, exceptions, logging.
 - `utils/` → Pure helper functions shared across layers.
 
@@ -105,6 +105,7 @@ These are non-negotiable:
 - Services never call other services — use shared repository functions or `use_cases/` instead
 - No sync DB calls — all queries must be `async/await`
 - No raw ORM objects returned from endpoints — always map to Pydantic schemas
+- `schemas/` (Pydantic) is for API-boundary DTOs only; internal value objects passed between layers use a plain `@dataclass`, never a Pydantic schema
 - No secrets in code — always use `pydantic-settings` and `.env`
 - Error messages must ALWAYS come from `app/core/messages/error_message.py`
 - Success messages must ALWAYS come from `app/core/messages/success_message.py`

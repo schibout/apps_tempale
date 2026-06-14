@@ -24,3 +24,5 @@ class Permission(StrEnum):
     SUPPORT_UPDATE = "support:update"
     ACTIVITIES_READ = "activities:read"
     STATS_READ = "stats:read"
+    BROADCAST_READ = "broadcast:read"
+    BROADCAST_WRITE = "broadcast:write"

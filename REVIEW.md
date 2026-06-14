@@ -101,6 +101,7 @@ Yeni domain: model → schema → repository → service → route (her katman s
 - `model_config = ConfigDict(from_attributes=True)` ORM → Pydantic mapping için zorunlu ([schemas/user.py:22](app/schemas/user.py)).
 - Validator hata mesajları **`ErrorMessages.X`**'tan gelir, hardcode yasak ([schemas/user.py:43](app/schemas/user.py)).
 - `field_validator` + `@classmethod` paterni ([schemas/user.py:39-44](app/schemas/user.py)).
+- **`schemas/` yalnızca API sınırını geçen DTO'lar içindir** (request/response). Katmanlar arası taşınan ama API'yi geçmeyen **iç value object'ler `@dataclass`** olur, Pydantic schema değil — kanıt: [core/broadcast_templates.py](app/core/broadcast_templates.py) `RenderedContent`, [services/admin/broadcast_email.py](app/services/admin/broadcast_email.py) `BroadcastEmail`. Doğrulama/serialize gerektirmeyen iç veriye Pydantic koymak `schemas/`'ı kirletir ve gereksiz overhead getirir.
 
 ### 3.5 Error/Success messages — single source of truth
 - **Tüm hata mesajları [app/core/messages/error_message.py](app/core/messages/error_message.py)** — `ErrorMessages.X` class attribute olarak.
@@ -268,6 +269,7 @@ Yeni global concern → kendi modülüne `register_X(app)` / `init_X(app)` ile e
 - `field_validator` hata mesajının inline string olması.
 - `UserPublic`'e password/hashed_password sızması.
 - `model_dump()` yerine `dict()` (Pydantic v2'de deprecated).
+- **API sınırını geçmeyen iç value object için Pydantic schema kullanılmış** — `@dataclass` olmalı (`schemas/` yalnızca API DTO'ları; bkz. 3.4 ve `RenderedContent`/`BroadcastEmail`). Tersi de geçerli: gerçek request/response DTO'sunun `@dataclass` ile yazılması (Pydantic validation/serialize kaybı).
 
 ### 5.6 Migrations / models
 - **Model değişikliği var ama `app/alembic/versions/` altında migration yok.**
@@ -348,4 +350,4 @@ Bu maddeleri **flag etme**:
 
 ---
 
-Son güncelleme: 2026-06-09.
+Son güncelleme: 2026-06-14.

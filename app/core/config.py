@@ -132,6 +132,11 @@ class Settings(BaseSettings):
     SESSION_PURGE_CRON_HOUR: int = 4
     SESSION_PURGE_CRON_MINUTE: int = 0
 
+    # Broadcast email fan-out: recipients are emailed in batches with a pause
+    # between them to stay within the email provider's rate limits.
+    BROADCAST_EMAIL_BATCH_SIZE: int = 50
+    BROADCAST_EMAIL_THROTTLE_SECONDS: float = 1.0
+
     # Database connection pool (tuned per API worker)
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 10

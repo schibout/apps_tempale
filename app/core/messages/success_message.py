@@ -52,3 +52,6 @@ class SuccessMessages:
     TICKET_MESSAGE_SENT = "success.support.message_sent"
     ADMIN_TICKET_UPDATED = "success.support.admin_ticket_updated"
     ADMIN_TICKET_REPLIED = "success.support.admin_ticket_replied"
+
+    # Announcements / broadcast
+    BROADCAST_SENT = "success.announcement.sent"
