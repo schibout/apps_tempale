@@ -7,6 +7,7 @@ from app.models.support import (
     SupportMessageAttachment,
     SupportTicket,
 )
+from app.models.system_setting import SystemSetting
 from app.models.user import User
 from app.models.user_activity import UserActivity
 from app.models.user_session import UserSession
@@ -19,6 +20,7 @@ __all__ = [
     "SupportMessage",
     "SupportMessageAttachment",
     "SupportTicket",
+    "SystemSetting",
     "User",
     "UserActivity",
     "UserSession",

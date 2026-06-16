@@ -16,6 +16,7 @@ class FileCategory(StrEnum):
     GENERAL = "general"
     USER_PROFILE_PHOTO = "user_profile_photo"
     SUPPORT_ATTACHMENT = "support_attachment"
+    BRANDING_LOGO = "branding_logo"
 
 
 class FilePublic(BaseModel):

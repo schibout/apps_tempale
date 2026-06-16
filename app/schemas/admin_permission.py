@@ -26,3 +26,5 @@ class Permission(StrEnum):
     STATS_READ = "stats:read"
     BROADCAST_READ = "broadcast:read"
     BROADCAST_WRITE = "broadcast:write"
+    SYSTEM_SETTINGS_READ = "system_settings:read"
+    SYSTEM_SETTINGS_WRITE = "system_settings:write"

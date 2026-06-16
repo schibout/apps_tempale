@@ -13,6 +13,7 @@ from app.api.routes.admin import (
     files,
     stats,
     support,
+    system_settings,
     users,
 )
 
@@ -24,3 +25,4 @@ router.include_router(support.router, prefix="/support")
 router.include_router(activities.router)
 router.include_router(stats.router)
 router.include_router(broadcast.router)
+router.include_router(system_settings.router)

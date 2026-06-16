@@ -10,8 +10,10 @@ from app.models.file import File
 from app.models.user import User
 from app.repositories.file import create_file
 from app.schemas.file import FileCategory
+from app.schemas.user import SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
+from app.use_cases.settings import get_int
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +38,23 @@ async def upload_file_service(
     and the upload is recorded in the activity log. ``category`` tags the file
     and selects the Cloudinary sub-folder it lands in.
     """
+    # The branding logo is a site-wide asset: only admins/superadmins may write
+    # to it, otherwise any active user could overwrite the site logo folder.
+    if category is FileCategory.BRANDING_LOGO and current_user.role not in (
+        SystemRole.ADMIN,
+        SystemRole.SUPERADMIN,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.INSUFFICIENT_PERMISSIONS,
+        )
+
+    # Upload ceiling is admin-configurable at runtime (registry default seeds
+    # from MAX_UPLOAD_SIZE_BYTES, so behaviour is unchanged until an admin edits).
+    max_bytes = await get_int(session, "max_upload_size_mb") * 1024 * 1024
+
     # Fast reject using the reported size before reading the body into memory.
-    if upload.size is not None and upload.size > settings.MAX_UPLOAD_SIZE_BYTES:
+    if upload.size is not None and upload.size > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=ErrorMessages.FILE_TOO_LARGE,
@@ -56,15 +73,21 @@ async def upload_file_service(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorMessages.FILE_EMPTY,
         )
-    if len(content) > settings.MAX_UPLOAD_SIZE_BYTES:
+    if len(content) > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=ErrorMessages.FILE_TOO_LARGE,
         )
 
     # Organise assets on Cloudinary as ``<base>/<category>/<user_id>`` so files
-    # are grouped by purpose and owner instead of dumped in one flat folder.
-    folder = f"{settings.CLOUDINARY_UPLOAD_FOLDER}/{category.value}/{current_user.id}"
+    # are grouped by purpose and owner. Site-wide assets (e.g. the logo) are not
+    # owned by a user, so they live directly under ``<base>/<category>``.
+    if category is FileCategory.BRANDING_LOGO:
+        folder = f"{settings.CLOUDINARY_UPLOAD_FOLDER}/{category.value}"
+    else:
+        folder = (
+            f"{settings.CLOUDINARY_UPLOAD_FOLDER}/{category.value}/{current_user.id}"
+        )
     try:
         result = await storage.upload_file(
             content, folder=folder, resource_type="image"

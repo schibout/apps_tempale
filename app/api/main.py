@@ -8,6 +8,7 @@ from app.api.routes import (
     health,
     notifications,
     support,
+    system_settings,
     users,
 )
 
@@ -23,5 +24,6 @@ api_router.include_router(
     announcements.router, prefix="/announcements", tags=["announcements"]
 )
 api_router.include_router(support.router, prefix="/support", tags=["support"])
+api_router.include_router(system_settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(files.router, tags=["files"])

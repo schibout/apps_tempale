@@ -195,6 +195,41 @@ CurrentSuperAdmin = Annotated[User, Depends(get_current_superadmin)]
 CurrentSessionId = Annotated[uuid.UUID | None, Depends(get_current_session_id)]
 
 
+async def resolve_optional_user(request: Request, db: AsyncSession) -> User | None:
+    """Resolve the JWT to a User if present and valid, else None (non-raising).
+
+    A plain helper — NOT a FastAPI dependency — so the maintenance middleware can
+    call it with a manually-opened session. It reads the token straight from the
+    cookie or ``Authorization`` header rather than via ``OAuth2PasswordBearer``,
+    which only resolves inside the HTTP dependency flow (and breaks on WebSocket
+    routes). Mirrors ``get_ws_user`` for HTTP.
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[len("Bearer ") :]
+    if not token:
+        return None
+    try:
+        if await is_token_blacklisted(token):
+            return None
+        claims = decode_token_payload(token)
+        if claims is None:
+            return None
+        sid = claims.get("sid")
+        if sid and await is_session_revoked(sid):
+            return None
+        token_data = TokenPayload(sub=claims["sub"], sid=sid, jti=claims.get("jti"))
+    except (ValidationError, ValueError):
+        return None
+    user = await get_user_by_id(db, user_id=uuid.UUID(token_data.sub))
+    # Mirror get_ws_user: a deactivated account (even with a still-valid token)
+    # must not pass — otherwise a suspended/deactivated admin could slip through
+    # the maintenance gate.
+    return user if user and user.is_active else None
+
+
 async def user_has_permission(
     session: AsyncSession, user: User, permission: Permission
 ) -> bool:

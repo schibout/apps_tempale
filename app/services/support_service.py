@@ -41,6 +41,7 @@ from app.schemas.support import (
 )
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
+from app.use_cases.settings import get_bool
 from app.use_cases.support_attachments import resolve_attachment_files
 from app.utils import utc_now
 
@@ -120,6 +121,12 @@ async def create_ticket_service(
     request: Request | None = None,
 ) -> SupportTicketResponse:
     """Open a new ticket with its first message and optional attachments."""
+    if not await get_bool(session, "support_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.SUPPORT_DISABLED,
+        )
+
     files = await resolve_attachment_files(
         session,
         file_ids=payload.attachment_file_ids,

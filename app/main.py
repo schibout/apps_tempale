@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.main import api_router
+from app.api.middleware import register_maintenance_middleware
 from app.core.config import settings
 from app.core.lifespan import lifespan
 from app.core.metrics import init_metrics
@@ -28,6 +29,7 @@ app = FastAPI(
 
 register_exception_handlers(app)
 register_middleware(app)
+register_maintenance_middleware(app)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # OpenTelemetry tracing — no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set.

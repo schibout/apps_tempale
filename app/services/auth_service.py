@@ -55,6 +55,7 @@ from app.schemas.user import (
 from app.schemas.user_activity import ActivityStatus, ActivityType, ResourceType
 from app.services.user_service import create_user_service
 from app.use_cases.log_activity import log_activity
+from app.use_cases.settings import get_bool
 from app.utils.email_templates import (
     generate_account_locked_email,
     generate_email_verification_email,
@@ -72,6 +73,12 @@ async def register_service(
     so a self-service registrant can never escalate to admin/superadmin or
     self-verify. Privileged user creation goes through the admin flow instead.
     """
+    if not await get_bool(session, "registration_enabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.REGISTRATION_DISABLED,
+        )
+
     safe_user = UserCreate(
         email=user_register.email,
         password=user_register.password,

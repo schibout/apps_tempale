@@ -55,3 +55,6 @@ class SuccessMessages:
 
     # Announcements / broadcast
     BROADCAST_SENT = "success.announcement.sent"
+
+    # System settings
+    SETTINGS_UPDATED = "success.settings.updated"

@@ -7,6 +7,7 @@ from sqlalchemy import update
 from app.core.config import settings
 from app.models.file import File
 from app.models.user import User
+from app.repositories.system_setting import upsert_system_setting
 from app.tests.conftest import TestingSessionLocal
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nfake-image-bytes"
@@ -46,6 +47,15 @@ async def _upload(
 ) -> object:
     """POST a file to /upload and return the response."""
     return await client.post("/upload", files={"file": (name, data, content_type)})
+
+
+async def _promote_to_admin(email: str) -> None:
+    """Grant the user the admin role directly in the DB."""
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.email == email).values(role="admin")
+        )
+        await session.commit()
 
 
 @pytest.mark.asyncio
@@ -105,6 +115,42 @@ async def test_upload_rejects_unknown_category(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_upload_branding_logo_forbidden_for_regular_user(client: AsyncClient):
+    """A non-admin cannot write to the site-wide branding logo bucket."""
+    await _register_verify_login(client, "u@test.com")
+
+    response = await client.post(
+        "/upload",
+        files={"file": ("logo.png", PNG_BYTES, "image/png")},
+        data={"category": "branding_logo"},
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_branding_logo_allowed_for_admin(
+    client: AsyncClient, mock_cloudinary
+):
+    """An admin may upload the branding logo; it lands in the site-wide folder."""
+    await _register_verify_login(client, "admin@test.com")
+    await _promote_to_admin("admin@test.com")
+
+    response = await client.post(
+        "/upload",
+        files={"file": ("logo.png", PNG_BYTES, "image/png")},
+        data={"category": "branding_logo"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["category"] == "branding_logo"
+
+    # Site-wide asset: no per-user sub-folder, unlike user-owned categories.
+    folder = mock_cloudinary.upload.call_args.kwargs["folder"]
+    assert folder == f"{settings.CLOUDINARY_UPLOAD_FOLDER}/branding_logo"
+
+
+@pytest.mark.asyncio
 async def test_upload_invalid_mime_rejected(client: AsyncClient):
     """Non-image content types are rejected with 415."""
     await _register_verify_login(client, "u@test.com")
@@ -121,11 +167,16 @@ async def test_upload_empty_rejected(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_upload_too_large_rejected(client: AsyncClient, monkeypatch):
-    """Files over MAX_UPLOAD_SIZE_BYTES are rejected with 413."""
+async def test_upload_too_large_rejected(client: AsyncClient):
+    """Files over the configured max upload size are rejected with 413."""
     await _register_verify_login(client, "u@test.com")
-    monkeypatch.setattr(settings, "MAX_UPLOAD_SIZE_BYTES", 4)
-    response = await _upload(client, data=b"too-many-bytes")
+    # Lower the limit to its 1 MB minimum via the system setting, then exceed it.
+    async with TestingSessionLocal() as session:
+        await upsert_system_setting(
+            session, key="max_upload_size_mb", value="1", updated_by=None
+        )
+    oversized = b"0" * (1024 * 1024 + 1)
+    response = await _upload(client, data=oversized)
     assert response.status_code == 413
 
 

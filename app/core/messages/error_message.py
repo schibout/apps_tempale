@@ -82,3 +82,12 @@ class ErrorMessages:
     ANNOUNCEMENT_TEMPLATE_NOT_FOUND = "error.announcement.template_not_found"
     ANNOUNCEMENT_INVALID_CONTENT = "error.announcement.invalid_content"
     ANNOUNCEMENT_INVALID_AUDIENCE = "error.announcement.invalid_audience"
+
+    # System settings
+    SETTING_NOT_FOUND = "error.settings.not_found"
+    SETTING_INVALID_VALUE = "error.settings.invalid_value"
+
+    # System / availability
+    MAINTENANCE_MODE = "error.system.maintenance"
+    REGISTRATION_DISABLED = "error.auth.registration_disabled"
+    SUPPORT_DISABLED = "error.support.disabled"
