@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request
 from app.api.deps import SessionDep
 from app.core.rate_limit import rate_limit_public
 from app.schemas.system_settings import PublicSettingsResponse
-from app.services.system_settings import get_public_settings_service
+from app.services.system_settings_service import get_public_settings_service
 
 router = APIRouter()
 

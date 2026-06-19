@@ -13,7 +13,7 @@ from app.schemas.system_settings import (
     SettingUpdateResponse,
 )
 from app.schemas.user_activity import ActivityType, ResourceType
-from app.services.system_settings import (
+from app.services.system_settings_service import (
     list_all_settings_service,
     update_setting_service,
 )

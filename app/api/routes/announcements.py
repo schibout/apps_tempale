@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.api.deps import CurrentActiveUser, SessionDep
 from app.schemas.announcement import ActiveBannerResponse
-from app.services.announcement import get_active_banner_service
+from app.services.announcement_service import get_active_banner_service
 
 router = APIRouter()
 
