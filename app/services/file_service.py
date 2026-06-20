@@ -14,6 +14,7 @@ from app.schemas.user import SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.settings import get_int
+from app.utils import prefixed_filename
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ async def upload_file_service(
     file = File(
         url=result.url,
         public_id=result.public_id,
-        filename=upload.filename,
+        filename=prefixed_filename(upload.filename),
         content_type=content_type,
         size=len(content),
         category=category.value,

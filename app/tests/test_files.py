@@ -1,8 +1,9 @@
+import re
 import uuid
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.core.config import settings
 from app.models.file import File
@@ -156,6 +157,28 @@ async def test_upload_invalid_mime_rejected(client: AsyncClient):
     await _register_verify_login(client, "u@test.com")
     response = await _upload(client, name="a.pdf", content_type="application/pdf")
     assert response.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_upload_sanitizes_stored_filename(client: AsyncClient):
+    """A path-traversal/injection filename is sanitized and randomly prefixed."""
+    await _register_verify_login(client, "u@test.com")
+
+    response = await _upload(client, name="../../<script>.png")
+
+    assert response.status_code == 201, response.text
+    # Response reflects the stored record: random 6-digit prefix, traversal
+    # stripped, "<>" defanged.
+    assert re.fullmatch(r"\d{6}__script_\.png", response.json()["filename"])
+
+    # End-to-end: the value actually written to the DB is the prefixed, sanitized
+    # one, never the raw client-supplied path.
+    file_id = uuid.UUID(response.json()["id"])
+    async with TestingSessionLocal() as session:
+        stored = await session.scalar(select(File).where(File.id == file_id))
+    assert stored is not None
+    assert stored.filename is not None
+    assert re.fullmatch(r"\d{6}__script_\.png", stored.filename)
 
 
 @pytest.mark.asyncio
