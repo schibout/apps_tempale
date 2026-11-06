@@ -1,15 +1,21 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, status
 
 from app.api.decorators import audit_unexpected_failure
-from app.api.deps import CurrentActiveUser, SessionDep
+from app.api.deps import SessionDep, require_user_permission
 from app.core.rate_limit import rate_limit_strict
+from app.models.user import User
+from app.schemas.admin_permission import Permission
 from app.schemas.file import FileCategory, FilePublic
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.services.file_service import upload_file_service
 
 router = APIRouter()
+
+FileUploader = Annotated[
+    User, Depends(require_user_permission(Permission.SELF_FILES_UPLOAD))
+]
 
 
 @router.post("/upload", response_model=FilePublic, status_code=status.HTTP_201_CREATED)
@@ -22,7 +28,7 @@ router = APIRouter()
 async def upload_file(
     request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: FileUploader,
     file: UploadFile,
     category: Annotated[FileCategory, Form()] = FileCategory.GENERAL,
 ) -> FilePublic:

@@ -1,12 +1,19 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, WebSocket, status
+from fastapi import APIRouter, Depends, Query, Request, WebSocket, status
 
 from app.api.decorators import audit_unexpected_failure
-from app.api.deps import CurrentActiveUser, SessionDep, get_ws_user
+from app.api.deps import (
+    SessionDep,
+    get_ws_user,
+    require_user_permission,
+    user_has_permission,
+)
 from app.core.rate_limit import rate_limit_authenticated, rate_limit_strict
 from app.core.realtime import serve_multiplex, user_topic
+from app.models.user import User
+from app.schemas.admin_permission import Permission
 from app.schemas.support import (
     MessageCreate,
     SupportMessageResponse,
@@ -35,6 +42,19 @@ router = APIRouter()
 # grounds; we use the one code for both "no/invalid auth" and "not the owner".
 _WS_POLICY_VIOLATION = 1008
 
+TicketReader = Annotated[
+    User, Depends(require_user_permission(Permission.SELF_SUPPORT_READ))
+]
+TicketCreator = Annotated[
+    User, Depends(require_user_permission(Permission.SELF_SUPPORT_CREATE))
+]
+TicketReplier = Annotated[
+    User, Depends(require_user_permission(Permission.SELF_SUPPORT_REPLY))
+]
+TicketCloser = Annotated[
+    User, Depends(require_user_permission(Permission.SELF_SUPPORT_CLOSE))
+]
+
 
 @router.post(
     "/tickets",
@@ -50,7 +70,7 @@ _WS_POLICY_VIOLATION = 1008
 async def create_ticket(
     request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: TicketCreator,
     payload: TicketCreate,
 ) -> SupportTicketResponse:
     """Open a new support ticket with its first message."""
@@ -63,7 +83,7 @@ async def create_ticket(
 async def list_my_tickets(
     _request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: TicketReader,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     status_filter: Annotated[TicketStatus | None, Query(alias="status")] = None,
@@ -84,7 +104,7 @@ async def list_my_tickets(
 async def get_my_ticket(
     _request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: TicketReader,
     ticket_id: uuid.UUID,
 ) -> SupportTicketDetail:
     """Get one of the caller's tickets with its full message thread."""
@@ -107,7 +127,7 @@ async def get_my_ticket(
 async def reply_ticket(
     request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: TicketReplier,
     ticket_id: uuid.UUID,
     payload: MessageCreate,
 ) -> SupportMessageResponse:
@@ -131,7 +151,7 @@ async def reply_ticket(
 async def close_ticket(
     request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: TicketCloser,
     ticket_id: uuid.UUID,
 ) -> SupportTicketResponse:
     """Close one of the caller's tickets."""
@@ -144,13 +164,16 @@ async def close_ticket(
 async def support_feed_ws(websocket: WebSocket, session: SessionDep) -> None:
     """One multiplexed socket per user: their feed plus any ticket they own.
 
-    Authenticates from the ``access_token`` cookie, auto-subscribes to the
-    caller's feed (``user:{id}``), then accepts ``subscribe``/``unsubscribe``
-    frames for ``ticket:{id}`` threads they own. Replaces the old per-ticket
-    socket so the whole session rides one connection.
+    Authenticates from the ``access_token`` cookie, requires ``self.support:read``,
+    auto-subscribes to the caller's feed (``user:{id}``), then accepts
+    ``subscribe``/``unsubscribe`` frames for ``ticket:{id}`` threads they own.
+    Replaces the old per-ticket socket so the whole session rides one connection.
+    The socket closes if the caller loses the permission.
     """
     user = await get_ws_user(websocket, session)
-    if user is None:
+    if user is None or not await user_has_permission(
+        session, user, Permission.SELF_SUPPORT_READ
+    ):
         await websocket.close(code=_WS_POLICY_VIOLATION)
         return
 
@@ -160,5 +183,8 @@ async def support_feed_ws(websocket: WebSocket, session: SessionDep) -> None:
         )
 
     await serve_multiplex(
-        websocket, feed_topic=user_topic(user.id), authorize_ticket=authorize
+        websocket,
+        feed_topic=user_topic(user.id),
+        authorize_ticket=authorize,
+        requires=(user, Permission.SELF_SUPPORT_READ),
     )

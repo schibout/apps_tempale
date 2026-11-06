@@ -16,7 +16,7 @@ from app.models.user import User
 from app.repositories.token_blacklist import is_token_blacklisted
 from app.repositories.user import get_user_by_id
 from app.repositories.user_session import is_session_revoked
-from app.schemas.admin_permission import Permission
+from app.schemas.admin_permission import Permission, is_self_permission
 from app.schemas.token import TokenPayload
 from app.schemas.user import SystemRole
 from app.use_cases.permissions import user_has_permission
@@ -320,8 +320,12 @@ def require_user_permission(permission: Permission) -> Callable[..., Awaitable[U
 
     Same check as ``require_permission``, resolved from the active user so a
     regular account can pass with a ``self.*`` key. It does not demand the admin
-    tier, so it does not carry the admin-only MFA check either.
+    tier, so it does not carry the admin-only MFA check either. That is why any
+    other key is refused when the route is defined: an admin key behind this
+    factory would skip the admin gate.
     """
+    if not is_self_permission(permission):
+        raise ValueError(f"{permission} is not a self-service (self.*) permission")
 
     async def _require(user: CurrentActiveUser, session: SessionDep) -> User:
         """Enforce the captured permission for the resolved active user."""

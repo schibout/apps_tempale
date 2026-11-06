@@ -188,6 +188,21 @@ async def user_has_permission(
     return permission in await get_effective_permissions(session, user)
 
 
+async def user_has_permission_uncached(
+    session: AsyncSession, user: User, permission: Permission
+) -> bool:
+    """Answer as ``user_has_permission`` does, reading the database, not the cache.
+
+    For a decision that outlives the request, such as keeping a socket open: a
+    failed invalidation must not keep it alive past the revocation.
+    """
+    if user.role == SystemRole.SUPERADMIN:
+        return True
+    if not _tier_allows(user, permission):
+        return False
+    return permission in await get_effective_permissions_db(session, user.id)
+
+
 async def get_usable_permissions(session: AsyncSession, user: User) -> list[Permission]:
     """Return the sorted keys ``user_has_permission`` accepts for this account."""
     effective = await get_effective_permissions(session, user)

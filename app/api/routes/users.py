@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, Response, WebSocket
+from fastapi import APIRouter, Depends, Query, Request, Response, WebSocket
 
 from app.api.decorators import audit_unexpected_failure
 from app.api.deps import (
@@ -10,11 +10,14 @@ from app.api.deps import (
     CurrentUser,
     SessionDep,
     get_ws_user,
+    require_user_permission,
 )
 from app.core.config import settings
 from app.core.messages.success_message import SuccessMessages
 from app.core.rate_limit import rate_limit_strict
 from app.core.realtime import account_topic, serve_account_socket
+from app.models.user import User
+from app.schemas.admin_permission import Permission
 from app.schemas.msg import Message
 from app.schemas.user import (
     DeleteAccount,
@@ -37,6 +40,10 @@ from app.services.user_service import (
 )
 
 router = APIRouter()
+
+ProfileUpdater = Annotated[
+    User, Depends(require_user_permission(Permission.SELF_PROFILE_UPDATE))
+]
 
 
 @router.get("/me", response_model=UserMe)
@@ -129,7 +136,7 @@ async def revoke_my_session(
 async def update_user_me(
     request: Request,
     session: SessionDep,
-    current_user: CurrentActiveUser,
+    current_user: ProfileUpdater,
     user_in: UserUpdateMe,
 ) -> UserUpdateResponse:
     """Update own user details."""

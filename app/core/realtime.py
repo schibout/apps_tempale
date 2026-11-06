@@ -14,6 +14,9 @@ Topics are plain strings:
   * ``notifications:{uuid}`` — a single user's persistent in-app notification feed
 
 The Redis channel is the topic prefixed with ``rt:``.
+
+A socket gated by a permission also watches its owner's account topic, and is
+closed when a change there takes the permission away.
 """
 
 from __future__ import annotations
@@ -22,18 +25,26 @@ import asyncio
 import json
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from app.core.db import AsyncSessionLocal
 from app.core.redis import get_redis
+from app.models.user import User
+from app.repositories.user import get_user_by_id
+from app.schemas.admin_permission import Permission
 from app.schemas.support import RealtimeEvent
+from app.use_cases.permissions import user_has_permission_uncached
 
 logger = logging.getLogger(__name__)
 
 _CHANNEL_PREFIX = "rt:"
 _CHANNEL_PATTERN = f"{_CHANNEL_PREFIX}*"
+# Close code of a socket that lost its right to stay open (RFC 6455).
+_WS_POLICY_VIOLATION = 1008
 
 
 class ConnectionManager:
@@ -140,6 +151,77 @@ async def publish_feeds(owner_id: uuid.UUID, event: RealtimeEvent) -> None:
     await publish_safe(user_topic(owner_id), event)
 
 
+# --- Permission watch --------------------------------------------------------
+
+
+class _WakeOnFrame:
+    """Topic subscriber that only remembers that a frame arrived."""
+
+    def __init__(self) -> None:
+        """Start with no frame pending."""
+        self._arrived = asyncio.Event()
+
+    async def send_text(self, _data: str) -> None:
+        """Note the frame; its content does not matter, only the re-check does."""
+        self._arrived.set()
+
+    async def wait(self) -> None:
+        """Wait for a frame, folding those that arrive together into one wake-up."""
+        await self._arrived.wait()
+        self._arrived.clear()
+
+
+async def _still_holds(user_id: uuid.UUID, permission: Permission) -> bool:
+    """Return whether the account may still use the key, refusing on any failure.
+
+    Uses a short session of its own, since the watch outlives any request, and
+    reloads the account because its tier or activation may be what changed.
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await get_user_by_id(session, user_id=user_id)
+            if user is None or not user.is_active:
+                return False
+            return await user_has_permission_uncached(session, user, permission)
+    except Exception:  # noqa: BLE001 - an unanswered check must not leave it open
+        logger.exception("Socket permission check failed for user %s", user_id)
+        return False
+
+
+async def _watch_permission(
+    websocket: WebSocket, user_id: uuid.UUID, permission: Permission
+) -> None:
+    """Close the socket once a change on the account topic removes the key.
+
+    The first check runs after the subscription, so a change published between
+    the caller's own check and this point is not missed.
+    """
+    topic = account_topic(user_id)
+    signal = _WakeOnFrame()
+    await manager.connect(topic, signal)
+    try:
+        while await _still_holds(user_id, permission):
+            await signal.wait()
+    finally:
+        await manager.disconnect(topic, signal)
+    await manager.disconnect_all(websocket)
+    # The client may have left in the meantime: nothing is left to close then.
+    with suppress(RuntimeError, WebSocketDisconnect):
+        await websocket.close(code=_WS_POLICY_VIOLATION)
+
+
+def close_on_permission_loss(
+    websocket: WebSocket, user: User, permission: Permission
+) -> asyncio.Task[None]:
+    """Watch an accepted socket and close it when ``user`` loses ``permission``.
+
+    Works with any key. The caller owns the returned task and cancels it when
+    the socket ends. Pass ``requires`` to the ``serve_*`` functions rather than
+    calling this directly: they start the watch after the handshake.
+    """
+    return asyncio.create_task(_watch_permission(websocket, user.id, permission))
+
+
 # --- Multiplexed WebSocket serving -----------------------------------------
 
 _TICKET_TOPIC_PREFIX = "ticket:"
@@ -186,11 +268,31 @@ async def _handle_command(
         await manager.disconnect(topic, websocket)
 
 
+@asynccontextmanager
+async def _serving(
+    websocket: WebSocket, topic: str, requires: tuple[User, Permission] | None
+) -> AsyncIterator[None]:
+    """Hold a socket open on ``topic``, watching ``requires``, until it closes."""
+    await websocket.accept()
+    await manager.connect(topic, websocket)
+    watcher = close_on_permission_loss(websocket, *requires) if requires else None
+    try:
+        yield
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if watcher is not None:
+            watcher.cancel()
+            await asyncio.gather(watcher, return_exceptions=True)
+        await manager.disconnect_all(websocket)
+
+
 async def serve_multiplex(
     websocket: WebSocket,
     *,
     feed_topic: str,
     authorize_ticket: AuthorizeTicket,
+    requires: tuple[User, Permission] | None = None,
 ) -> None:
     """Run a multiplexed support socket: one feed topic plus on-demand tickets.
 
@@ -198,36 +300,31 @@ async def serve_multiplex(
     feed). The client may then send ``{"action": "subscribe"|"unsubscribe",
     "topic": "ticket:<uuid>"}`` frames to follow a single ticket thread, gated by
     ``authorize_ticket``. Every joined topic is dropped when the socket closes.
-    The socket must already be authenticated; it is accepted here.
+    The socket must already be authenticated; it is accepted here. With
+    ``requires`` (the user and the key), it is closed when the user loses the key.
     """
-    await websocket.accept()
-    await manager.connect(feed_topic, websocket)
-    try:
+    async with _serving(websocket, feed_topic, requires):
         while True:
             raw = await websocket.receive_text()
             await _handle_command(websocket, raw, authorize_ticket)
-    except WebSocketDisconnect:
-        pass
-    finally:
-        await manager.disconnect_all(websocket)
 
 
-async def serve_account_socket(websocket: WebSocket, *, topic: str) -> None:
+async def serve_account_socket(
+    websocket: WebSocket,
+    *,
+    topic: str,
+    requires: tuple[User, Permission] | None = None,
+) -> None:
     """Run a notification-only socket subscribed to a single ``topic``.
 
     The client sends nothing; the loop only awaits ``receive_text`` so a close
     is detected and the socket is unsubscribed. The socket must already be
-    authenticated; it is accepted here.
+    authenticated; it is accepted here. With ``requires`` (the user and the key),
+    it is closed when the user loses the key.
     """
-    await websocket.accept()
-    await manager.connect(topic, websocket)
-    try:
+    async with _serving(websocket, topic, requires):
         while True:
             await websocket.receive_text()
-    except WebSocketDisconnect:
-        pass
-    finally:
-        await manager.disconnect_all(websocket)
 
 
 async def _listen() -> None:
