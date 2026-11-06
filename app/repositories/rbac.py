@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import delete, func, or_, select, union
+from sqlalchemy import ColumnElement, Select, delete, func, or_, select, union
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.models.rbac import (
     RbacUserRole,
 )
 from app.schemas.admin_permission import Permission
+from app.schemas.rbac import RbacAudience
 
 # A losing process only conflicts once per concurrent winner, and the winner's
 # committed rows are visible to the retry, so a few attempts are enough.
@@ -166,38 +167,101 @@ async def assign_default_role(session: AsyncSession, user_id: uuid.UUID) -> None
     await session.flush()
 
 
-async def get_assigned_permissions(
-    session: AsyncSession, user_id: uuid.UUID, now: datetime
-) -> set[Permission]:
-    """Return the keys an account holds through roles and sets valid at ``now``."""
-    through_roles = (
+def _keys_through_roles(
+    user_id: uuid.UUID, assignment_filter: ColumnElement[bool]
+) -> Select:
+    """Select the keys of an account's role assignments passing the filter."""
+    return (
         select(RbacPermissionSetItem.permission)
         .join(
             RbacRolePermissionSet,
             RbacRolePermissionSet.set_id == RbacPermissionSetItem.set_id,
         )
         .join(RbacUserRole, RbacUserRole.role_id == RbacRolePermissionSet.role_id)
-        .where(
-            RbacUserRole.user_id == user_id,
-            or_(RbacUserRole.expires_at.is_(None), RbacUserRole.expires_at > now),
-        )
+        .where(RbacUserRole.user_id == user_id, assignment_filter)
     )
-    through_sets = (
+
+
+def _keys_through_sets(
+    user_id: uuid.UUID, assignment_filter: ColumnElement[bool]
+) -> Select:
+    """Select the keys of an account's direct set assignments passing the filter."""
+    return (
         select(RbacPermissionSetItem.permission)
         .join(
             RbacUserPermissionSet,
             RbacUserPermissionSet.set_id == RbacPermissionSetItem.set_id,
         )
-        .where(
-            RbacUserPermissionSet.user_id == user_id,
+        .where(RbacUserPermissionSet.user_id == user_id, assignment_filter)
+    )
+
+
+async def _read_keys(
+    session: AsyncSession, through_roles: Select, through_sets: Select
+) -> set[Permission]:
+    """Return the known keys selected by both assignment queries."""
+    rows = await session.execute(union(through_roles, through_sets))
+    return {Permission(key) for key in rows.scalars() if key in _VALID_PERMISSIONS}
+
+
+async def get_assigned_permissions(
+    session: AsyncSession, user_id: uuid.UUID, now: datetime
+) -> set[Permission]:
+    """Return the keys an account holds through roles and sets valid at ``now``."""
+    return await _read_keys(
+        session,
+        _keys_through_roles(
+            user_id,
+            or_(RbacUserRole.expires_at.is_(None), RbacUserRole.expires_at > now),
+        ),
+        _keys_through_sets(
+            user_id,
             or_(
                 RbacUserPermissionSet.expires_at.is_(None),
                 RbacUserPermissionSet.expires_at > now,
             ),
+        ),
+    )
+
+
+async def get_permanent_assigned_permissions(
+    session: AsyncSession, user_id: uuid.UUID
+) -> set[Permission]:
+    """Return the keys an account holds through assignments without an end date."""
+    return await _read_keys(
+        session,
+        _keys_through_roles(user_id, RbacUserRole.expires_at.is_(None)),
+        _keys_through_sets(user_id, RbacUserPermissionSet.expires_at.is_(None)),
+    )
+
+
+async def delete_admin_audience_assignments(
+    session: AsyncSession, user_id: uuid.UUID
+) -> None:
+    """Remove an account's non-``user`` roles and sets, in the caller's transaction.
+
+    Flushes without committing, so a tier change and this removal land together.
+    The ``user``-audience assignments stay: an account keeps its self-service keys
+    whatever its tier.
+    """
+    admin_roles = select(RbacRole.id).where(
+        RbacRole.audience != RbacAudience.USER.value
+    )
+    admin_sets = select(RbacPermissionSet.id).where(
+        RbacPermissionSet.audience != RbacAudience.USER.value
+    )
+    await session.execute(
+        delete(RbacUserRole).where(
+            RbacUserRole.user_id == user_id, RbacUserRole.role_id.in_(admin_roles)
         )
     )
-    rows = await session.execute(union(through_roles, through_sets))
-    return {Permission(key) for key in rows.scalars() if key in _VALID_PERMISSIONS}
+    await session.execute(
+        delete(RbacUserPermissionSet).where(
+            RbacUserPermissionSet.user_id == user_id,
+            RbacUserPermissionSet.set_id.in_(admin_sets),
+        )
+    )
+    await session.flush()
 
 
 async def get_next_assignment_expiry(

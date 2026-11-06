@@ -20,13 +20,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.messages.error_message import ErrorMessages
+from app.core.realtime import account_topic, publish_safe
 from app.core.redis import get_redis
 from app.models.user import User
 from app.repositories.admin.permission import get_user_permissions
 from app.repositories.rbac import (
     get_assigned_permissions,
     get_next_assignment_expiry,
+    get_permanent_assigned_permissions,
 )
+from app.schemas.account import AccountEvent, AccountEventType
 from app.schemas.admin_permission import Permission, is_self_permission
 from app.schemas.user import SystemRole
 from app.utils import utc_now
@@ -215,19 +218,61 @@ async def ensure_can_grant(
 ) -> None:
     """Raise 403 unless ``actor`` holds every key it is about to hand out.
 
-    A superadmin holds them all. Anyone else is read from the database, not the
-    cache: a grant outlives the request, so a key just withdrawn from the actor
-    must not be passed on through a stale entry.
+    A superadmin holds them all. Anyone else counts only what it holds for good,
+    its direct grants and the assignments without an end date: a grant has no end
+    date, so a temporary key must not outlive its term through an account the
+    actor created or edited. Read from the database, not the cache, so a key just
+    withdrawn from the actor is not passed on through a stale entry.
     """
     if actor.role == SystemRole.SUPERADMIN:
         return
-    held = await get_effective_permissions_db(session, actor.id)
+    held = await get_permanent_assigned_permissions(session, actor.id)
+    held |= set(await get_user_permissions(session, actor.id))
     for permission in permissions:
         if permission not in held or not _tier_allows(actor, permission):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ErrorMessages.RBAC_PRIVILEGE_ESCALATION,
             )
+
+
+def guard_superadmin_target(actor: User, target: User) -> None:
+    """Block a non-superadmin from acting on a superadmin account at all.
+
+    Superadmin accounts may only be modified, suspended, or deleted by another
+    superadmin: no permission grant lets a plain admin touch them.
+    """
+    if target.role == SystemRole.SUPERADMIN and actor.role != SystemRole.SUPERADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN,
+        )
+
+
+async def ensure_can_act_on_admin(
+    session: AsyncSession, actor: User, target: User, permission: Permission
+) -> None:
+    """Demand an ``admins:*`` key from a non-superadmin acting on a plain admin.
+
+    The ``users:*`` routes also reach admin accounts, so without this a low-level
+    key could neutralise a stronger admin and the ``admins:*`` gates would mean
+    nothing. Read from the database: the check guards an irreversible action.
+    """
+    if target.role != SystemRole.ADMIN or actor.role == SystemRole.SUPERADMIN:
+        return
+    if not await user_has_permission_uncached(session, actor, permission):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.INSUFFICIENT_PERMISSIONS,
+        )
+
+
+async def signal_permissions_changed(user_id: uuid.UUID) -> None:
+    """Wake an account's open sockets so they re-check what it may still do."""
+    await publish_safe(
+        account_topic(user_id),
+        AccountEvent(type=AccountEventType.PERMISSIONS_UPDATED),
+    )
 
 
 async def get_usable_permissions(session: AsyncSession, user: User) -> list[Permission]:

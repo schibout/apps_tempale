@@ -8,7 +8,7 @@ from app.core.messages.success_message import SuccessMessages
 from app.models.user import User
 from app.repositories.user import get_user_by_id
 from app.repositories.user_session import list_active_sessions
-from app.schemas.user import SystemRole
+from app.schemas.admin_permission import Permission
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.schemas.user_session import (
     SessionListResponse,
@@ -16,6 +16,7 @@ from app.schemas.user_session import (
     SessionsRevokedResponse,
 )
 from app.use_cases.log_activity import log_activity
+from app.use_cases.permissions import ensure_can_act_on_admin, guard_superadmin_target
 from app.use_cases.revoke_user_sessions import revoke_all_user_sessions
 
 
@@ -28,18 +29,6 @@ async def _load_target(session: AsyncSession, user_id: uuid.UUID) -> User:
             detail=ErrorMessages.USER_NOT_FOUND,
         )
     return target
-
-
-def _guard_superadmin_target(actor: User, target: User) -> None:
-    """Only superadmins may touch a superadmin's sessions."""
-    if (
-        target.role == SystemRole.SUPERADMIN.value
-        and actor.role != SystemRole.SUPERADMIN.value
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorMessages.INSUFFICIENT_PERMISSIONS,
-        )
 
 
 async def list_user_sessions_admin_service(
@@ -76,7 +65,10 @@ async def revoke_user_sessions_admin_service(
     open tabs drop to the login screen without waiting for the next request.
     """
     target = await _load_target(session, user_id)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     revoked = await revoke_all_user_sessions(session, target.id)
 

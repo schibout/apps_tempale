@@ -31,11 +31,17 @@ from app.schemas.admin import (
     AdminUserListResponse,
     AdminUserUpdate,
 )
+from app.schemas.admin_permission import Permission
 from app.schemas.msg import Message
 from app.schemas.user import Language, SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.mfa_reset import reset_user_mfa
+from app.use_cases.permissions import (
+    ensure_can_act_on_admin,
+    guard_superadmin_target,
+    signal_permissions_changed,
+)
 from app.utils.email_templates import generate_password_reset_notification_email
 
 logger = logging.getLogger(__name__)
@@ -102,22 +108,6 @@ def _guard_not_self(admin_id: uuid.UUID, target_id: uuid.UUID, message: str) -> 
         )
 
 
-def _guard_superadmin_target(actor: User, target: User) -> None:
-    """Block a non-superadmin from acting on a superadmin account at all.
-
-    Superadmin accounts may only be modified, suspended, or deleted by another
-    superadmin — no permission grant lets a plain admin touch them.
-    """
-    if (
-        target.role == SystemRole.SUPERADMIN.value
-        and actor.role != SystemRole.SUPERADMIN.value
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN,
-        )
-
-
 async def _validate_avatar_file_exists(
     session: AsyncSession, file_id: uuid.UUID
 ) -> None:
@@ -157,7 +147,10 @@ async def update_user_admin_service(
 ) -> AdminUserListItem:
     """Apply an admin-authored update to a user, honouring last-admin guards."""
     target = await _load_target(session, user_id)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     update_data = payload.model_dump(exclude_unset=True)
 
@@ -184,12 +177,15 @@ async def update_user_admin_service(
     # can be purged (Cloudinary + DB) once the new reference is committed —
     # covers both replacing and clearing the avatar.
     avatar_change = "avatar_file_id" in update_data
+    deactivating = update_data.get("is_active") is False and target.is_active
     old_avatar_file_id = target.avatar_file_id
     new_avatar_file_id = update_data.get("avatar_file_id")
     if avatar_change and new_avatar_file_id is not None:
         await _validate_avatar_file_exists(session, new_avatar_file_id)
 
     updated = await update_user(session, target, update_data)
+    if deactivating:
+        await signal_permissions_changed(updated.id)
 
     if (
         avatar_change
@@ -227,7 +223,10 @@ async def suspend_user_admin_service(
     """
     target = await _load_target(session, user_id)
     _guard_not_self(current_user.id, target.id, ErrorMessages.ADMIN_CANNOT_MODIFY_SELF)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     if target.role == SystemRole.SUPERADMIN.value and await is_last_active_superadmin(
         session, target.id
@@ -252,6 +251,7 @@ async def suspend_user_admin_service(
         )
 
     await suspend_user(session, target)
+    await signal_permissions_changed(target.id)
 
     await log_activity(
         session=session,
@@ -274,6 +274,10 @@ async def unsuspend_user_admin_service(
 ) -> Message:
     """Lift an existing admin suspension and re-enable the account."""
     target = await _load_target(session, user_id)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     if target.suspended_at is None:
         raise HTTPException(
@@ -307,7 +311,10 @@ async def unlock_user_admin_service(
     The audit row identifies the target by ``resource_id`` only, never by email.
     """
     target = await _load_target(session, user_id)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     await clear_login_attempts(target.email)
 
@@ -336,7 +343,10 @@ async def reset_user_mfa_admin_service(
     by ``resource_id`` only, never by email.
     """
     target = await _load_target(session, user_id)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     revoked = await reset_user_mfa(session, target.id)
 
@@ -362,7 +372,10 @@ async def delete_user_admin_service(
     """Hard-delete a user. Protects the admin's own account and the last admin."""
     target = await _load_target(session, user_id)
     _guard_not_self(current_user.id, target.id, ErrorMessages.ADMIN_CANNOT_DELETE_SELF)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_DELETE
+    )
 
     if target.role == SystemRole.SUPERADMIN.value and await is_last_active_superadmin(
         session, target.id
@@ -383,6 +396,7 @@ async def delete_user_admin_service(
     target_id = target.id
 
     await delete_user(session, target)
+    await signal_permissions_changed(target_id)
 
     await log_activity(
         session=session,
@@ -412,7 +426,10 @@ async def change_password_admin_service(
     stays auditable and tied to a user-initiated reset request.
     """
     target = await _load_target(session, user_id)
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
+    await ensure_can_act_on_admin(
+        session, current_user, target, Permission.ADMINS_WRITE
+    )
 
     new_password = generate_secure_random_password()
     hashed_password = await aget_password_hash(new_password)

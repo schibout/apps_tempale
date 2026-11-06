@@ -7,7 +7,6 @@ from app.core.config import settings
 from app.core.email import send_email
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
-from app.core.realtime import account_topic, publish_safe
 from app.core.security import aget_password_hash, generate_otp_code
 from app.models.user import User
 from app.repositories.admin.permission import (
@@ -20,6 +19,7 @@ from app.repositories.admin.user import (
     list_admins,
     transfer_root_superadmin,
 )
+from app.repositories.rbac import delete_admin_audience_assignments
 from app.repositories.root_transfer import (
     delete_root_transfer_otp,
     store_root_transfer_otp,
@@ -32,7 +32,6 @@ from app.repositories.user import (
     get_user_by_id,
     update_user,
 )
-from app.schemas.account import AccountEvent, AccountEventType
 from app.schemas.admin import (
     AdminCreate,
     AdminListItem,
@@ -50,7 +49,12 @@ from app.schemas.user import Language, SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.notify import notify
-from app.use_cases.permissions import ensure_can_grant, invalidate_user_permissions
+from app.use_cases.permissions import (
+    ensure_can_grant,
+    guard_superadmin_target,
+    invalidate_user_permissions,
+    signal_permissions_changed,
+)
 from app.utils.email_templates import generate_root_transfer_otp_email
 
 _ROOT_TRANSFER_OTP_TTL_SECONDS = 180
@@ -90,28 +94,13 @@ async def _notify_permissions_changed(
     ``action`` mirrors the audit-log action string so the frontend can phrase
     the message per change kind.
     """
-    await publish_safe(
-        account_topic(user_id),
-        AccountEvent(type=AccountEventType.PERMISSIONS_UPDATED),
-    )
+    await signal_permissions_changed(user_id)
     await notify(
         session,
         user_id=user_id,
         notification_type=NotificationType.ADMIN_PERMISSIONS_CHANGED,
         data={"action": action},
     )
-
-
-def _guard_superadmin_target(actor: User, target: User) -> None:
-    """Refuse a delegated admin acting on a superadmin, whatever keys it holds."""
-    if (
-        target.role == SystemRole.SUPERADMIN.value
-        and actor.role != SystemRole.SUPERADMIN.value
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN,
-        )
 
 
 def _guard_not_self(actor: User, target: User, message: str) -> None:
@@ -216,8 +205,9 @@ async def promote_admin_to_superadmin_service(
     """Promote a plain admin to superadmin. Only the root superadmin may do this.
 
     The superadmin tier (promote/demote) is governed exclusively by the root
-    superadmin. Existing per-action grants are cleared because superadmins hold
-    every permission implicitly.
+    superadmin. Direct grants and admin-audience roles and sets are cleared,
+    because superadmins hold every permission implicitly and nothing should
+    resurface on a later demotion. ``user``-audience roles stay.
     """
     if not current_user.is_root_superadmin:
         raise HTTPException(
@@ -237,6 +227,7 @@ async def promote_admin_to_superadmin_service(
             detail=ErrorMessages.NOT_AN_ADMIN,
         )
 
+    await delete_admin_audience_assignments(session, target.id)
     await set_user_permissions(session, target.id, [], current_user.id)
     await update_user(session, target, {"role": SystemRole.SUPERADMIN.value})
     await invalidate_user_permissions(target.id)
@@ -269,8 +260,10 @@ async def demote_superadmin_service(
     """Demote a superadmin back to a plain admin. Only the root may do this.
 
     The root superadmin's own role is immutable here (use the email-verified
-    root transfer to hand over root). The demoted account becomes a grant-less
-    admin until permissions are assigned.
+    root transfer to hand over root). The demoted account loses its direct grants
+    and its admin-audience roles and sets, keeping its ``user``-audience roles, so
+    it holds no admin key until one is assigned. These go before the role changes:
+    an interruption leaves a superadmin, never an admin keeping its old keys.
     """
     if not current_user.is_root_superadmin:
         raise HTTPException(
@@ -295,8 +288,9 @@ async def demote_superadmin_service(
             detail=ErrorMessages.NOT_A_SUPERADMIN,
         )
 
-    await update_user(session, target, {"role": SystemRole.ADMIN.value})
+    await delete_admin_audience_assignments(session, target.id)
     await set_user_permissions(session, target.id, [], current_user.id)
+    await update_user(session, target, {"role": SystemRole.ADMIN.value})
     await invalidate_user_permissions(target.id)
 
     await log_activity(
@@ -398,7 +392,7 @@ async def delete_admin_service(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ErrorMessages.USER_NOT_FOUND,
         )
-    _guard_superadmin_target(current_user, target)
+    guard_superadmin_target(current_user, target)
     if target.role != SystemRole.ADMIN.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -416,10 +410,7 @@ async def delete_admin_service(
     await delete_user(session, target)
     await invalidate_user_permissions(target_id)
     # No inbox entry for an account that is gone: the event only wakes its sockets.
-    await publish_safe(
-        account_topic(target_id),
-        AccountEvent(type=AccountEventType.PERMISSIONS_UPDATED),
-    )
+    await signal_permissions_changed(target_id)
 
     await log_activity(
         session=session,

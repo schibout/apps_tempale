@@ -992,7 +992,10 @@ async def test_mfa_reset_requires_permission_and_revokes_sessions(
     assert await mfa_row("target@test.com") is not None
     assert (await other_client.get("/users/me")).status_code == 200
 
-    await grant_permissions("actor@test.com", [Permission.USERS_MFA_RESET])
+    # The target is an admin, so the reset also takes ``admins:write``.
+    await grant_permissions(
+        "actor@test.com", [Permission.USERS_MFA_RESET, Permission.ADMINS_WRITE]
+    )
     response = await client.post(f"/admin/users/{target_id}/mfa/reset")
 
     assert response.status_code == 200
