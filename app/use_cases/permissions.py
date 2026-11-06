@@ -77,16 +77,20 @@ async def _read_cache(user_id: uuid.UUID) -> tuple[str | None, set[Permission] |
         return None, None
 
 
+def seconds_until(moment: datetime) -> float:
+    """Return the seconds left before a stored date."""
+    # SQLite hands timezone-aware columns back naive; every stored date is UTC.
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return (moment - utc_now()).total_seconds()
+
+
 def _cache_ttl(next_expiry: datetime | None) -> int:
     """Return the entry's lifetime in seconds, capped at the next expiry."""
     if next_expiry is None:
         return settings.RBAC_CACHE_TTL_SECONDS
-    # SQLite hands timezone-aware columns back naive; every stored date is UTC.
-    if next_expiry.tzinfo is None:
-        next_expiry = next_expiry.replace(tzinfo=UTC)
     # Rounded down so the entry can never outlive the assignment it reflects.
-    remaining = int((next_expiry - utc_now()).total_seconds())
-    return min(settings.RBAC_CACHE_TTL_SECONDS, remaining)
+    return min(settings.RBAC_CACHE_TTL_SECONDS, int(seconds_until(next_expiry)))
 
 
 async def _write_cache(

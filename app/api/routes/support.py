@@ -32,6 +32,7 @@ from app.services.support_service import (
     list_my_tickets_service,
     reply_ticket_service,
 )
+from app.use_cases.socket_permissions import permission_watcher
 
 router = APIRouter()
 
@@ -186,5 +187,5 @@ async def support_feed_ws(websocket: WebSocket, session: SessionDep) -> None:
         websocket,
         feed_topic=user_topic(user.id),
         authorize_ticket=authorize,
-        requires=(user, Permission.SELF_SUPPORT_READ),
+        watcher=permission_watcher(user, Permission.SELF_SUPPORT_READ),
     )

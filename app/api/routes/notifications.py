@@ -25,6 +25,7 @@ from app.services.notification_service import (
     mark_read_service,
     unread_count_service,
 )
+from app.use_cases.socket_permissions import permission_watcher
 
 router = APIRouter()
 
@@ -111,5 +112,5 @@ async def notifications_ws(websocket: WebSocket, session: SessionDep) -> None:
     await serve_account_socket(
         websocket,
         topic=notifications_topic(user.id),
-        requires=(user, Permission.SELF_NOTIFICATIONS_READ),
+        watcher=permission_watcher(user, Permission.SELF_NOTIFICATIONS_READ),
     )

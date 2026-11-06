@@ -15,8 +15,9 @@ Topics are plain strings:
 
 The Redis channel is the topic prefixed with ``rt:``.
 
-A socket gated by a permission also watches its owner's account topic, and is
-closed when a change there takes the permission away.
+A gated socket can run a watch alongside it: ``watch_socket`` re-asks a check
+supplied by the caller and closes the socket on a refusal. What is being checked
+is not this module's business.
 """
 
 from __future__ import annotations
@@ -30,21 +31,21 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+from starlette.websockets import WebSocketState
 
-from app.core.db import AsyncSessionLocal
 from app.core.redis import get_redis
-from app.models.user import User
-from app.repositories.user import get_user_by_id
-from app.schemas.admin_permission import Permission
 from app.schemas.support import RealtimeEvent
-from app.use_cases.permissions import user_has_permission_uncached
 
 logger = logging.getLogger(__name__)
 
 _CHANNEL_PREFIX = "rt:"
 _CHANNEL_PATTERN = f"{_CHANNEL_PREFIX}*"
-# Close code of a socket that lost its right to stay open (RFC 6455).
+# Close code of a socket that lost its right to stay open (RFC 6455). Clients
+# treat it as final and do not reconnect.
 _WS_POLICY_VIOLATION = 1008
+# Close code of a socket whose right could not be checked (RFC 6455 registry).
+# Clients reconnect on it, and the handshake gate then decides again.
+_WS_TRY_AGAIN_LATER = 1013
 
 
 class ConnectionManager:
@@ -151,7 +152,13 @@ async def publish_feeds(owner_id: uuid.UUID, event: RealtimeEvent) -> None:
     await publish_safe(user_topic(owner_id), event)
 
 
-# --- Permission watch --------------------------------------------------------
+# --- Socket watch -------------------------------------------------------------
+
+# Answers whether a socket may stay open: the seconds this answer holds, or None
+# once it may not. Raising means the answer could not be obtained.
+SocketCheck = Callable[[], Awaitable[float | None]]
+# Starts a socket's watch once it is accepted; the task is cancelled when it ends.
+SocketWatcher = Callable[[WebSocket], "asyncio.Task[None]"]
 
 
 class _WakeOnFrame:
@@ -171,55 +178,40 @@ class _WakeOnFrame:
         self._arrived.clear()
 
 
-async def _still_holds(user_id: uuid.UUID, permission: Permission) -> bool:
-    """Return whether the account may still use the key, refusing on any failure.
+async def _wait_for_refusal(signal: _WakeOnFrame, check: SocketCheck) -> int:
+    """Re-ask ``check`` on each signal or delay until it refuses; return the code.
 
-    Uses a short session of its own, since the watch outlives any request, and
-    reloads the account because its tier or activation may be what changed.
+    The wait is bounded so the outcome never rests on an event being delivered.
     """
-    try:
-        async with AsyncSessionLocal() as session:
-            user = await get_user_by_id(session, user_id=user_id)
-            if user is None or not user.is_active:
-                return False
-            return await user_has_permission_uncached(session, user, permission)
-    except Exception:  # noqa: BLE001 - an unanswered check must not leave it open
-        logger.exception("Socket permission check failed for user %s", user_id)
-        return False
+    while True:
+        try:
+            holds_for = await check()
+        except Exception:  # noqa: BLE001 - an unanswered check must not leave it open
+            logger.exception("Socket check failed")
+            return _WS_TRY_AGAIN_LATER
+        if holds_for is None:
+            return _WS_POLICY_VIOLATION
+        with suppress(TimeoutError):
+            await asyncio.wait_for(signal.wait(), holds_for)
 
 
-async def _watch_permission(
-    websocket: WebSocket, user_id: uuid.UUID, permission: Permission
-) -> None:
-    """Close the socket once a change on the account topic removes the key.
+async def watch_socket(websocket: WebSocket, *, topic: str, check: SocketCheck) -> None:
+    """Close an accepted socket when ``check`` stops allowing it.
 
-    The first check runs after the subscription, so a change published between
-    the caller's own check and this point is not missed.
+    Any frame on ``topic`` triggers a new check, and so does the end of the delay
+    the last check returned. The first check runs after the subscription, so a
+    change published just before this point is not missed.
     """
-    topic = account_topic(user_id)
     signal = _WakeOnFrame()
     await manager.connect(topic, signal)
     try:
-        while await _still_holds(user_id, permission):
-            await signal.wait()
+        code = await _wait_for_refusal(signal, check)
     finally:
         await manager.disconnect(topic, signal)
     await manager.disconnect_all(websocket)
     # The client may have left in the meantime: nothing is left to close then.
     with suppress(RuntimeError, WebSocketDisconnect):
-        await websocket.close(code=_WS_POLICY_VIOLATION)
-
-
-def close_on_permission_loss(
-    websocket: WebSocket, user: User, permission: Permission
-) -> asyncio.Task[None]:
-    """Watch an accepted socket and close it when ``user`` loses ``permission``.
-
-    Works with any key. The caller owns the returned task and cancels it when
-    the socket ends. Pass ``requires`` to the ``serve_*`` functions rather than
-    calling this directly: they start the watch after the handshake.
-    """
-    return asyncio.create_task(_watch_permission(websocket, user.id, permission))
+        await websocket.close(code=code)
 
 
 # --- Multiplexed WebSocket serving -----------------------------------------
@@ -270,20 +262,25 @@ async def _handle_command(
 
 @asynccontextmanager
 async def _serving(
-    websocket: WebSocket, topic: str, requires: tuple[User, Permission] | None
+    websocket: WebSocket, topic: str, watcher: SocketWatcher | None
 ) -> AsyncIterator[None]:
-    """Hold a socket open on ``topic``, watching ``requires``, until it closes."""
+    """Hold a socket open on ``topic``, with its optional watch, until it closes."""
     await websocket.accept()
     await manager.connect(topic, websocket)
-    watcher = close_on_permission_loss(websocket, *requires) if requires else None
+    watch = watcher(websocket) if watcher is not None else None
     try:
         yield
     except WebSocketDisconnect:
         pass
+    except RuntimeError:
+        # Starlette refuses a read once the watch has closed the socket, which
+        # happens when a frame was being handled at that moment.
+        if websocket.application_state != WebSocketState.DISCONNECTED:
+            raise
     finally:
-        if watcher is not None:
-            watcher.cancel()
-            await asyncio.gather(watcher, return_exceptions=True)
+        if watch is not None:
+            watch.cancel()
+            await asyncio.gather(watch, return_exceptions=True)
         await manager.disconnect_all(websocket)
 
 
@@ -292,7 +289,7 @@ async def serve_multiplex(
     *,
     feed_topic: str,
     authorize_ticket: AuthorizeTicket,
-    requires: tuple[User, Permission] | None = None,
+    watcher: SocketWatcher | None = None,
 ) -> None:
     """Run a multiplexed support socket: one feed topic plus on-demand tickets.
 
@@ -300,10 +297,10 @@ async def serve_multiplex(
     feed). The client may then send ``{"action": "subscribe"|"unsubscribe",
     "topic": "ticket:<uuid>"}`` frames to follow a single ticket thread, gated by
     ``authorize_ticket``. Every joined topic is dropped when the socket closes.
-    The socket must already be authenticated; it is accepted here. With
-    ``requires`` (the user and the key), it is closed when the user loses the key.
+    The socket must already be authenticated; it is accepted here.
+    ``watcher``, if given, runs for as long as the socket does.
     """
-    async with _serving(websocket, feed_topic, requires):
+    async with _serving(websocket, feed_topic, watcher):
         while True:
             raw = await websocket.receive_text()
             await _handle_command(websocket, raw, authorize_ticket)
@@ -313,16 +310,16 @@ async def serve_account_socket(
     websocket: WebSocket,
     *,
     topic: str,
-    requires: tuple[User, Permission] | None = None,
+    watcher: SocketWatcher | None = None,
 ) -> None:
     """Run a notification-only socket subscribed to a single ``topic``.
 
     The client sends nothing; the loop only awaits ``receive_text`` so a close
     is detected and the socket is unsubscribed. The socket must already be
-    authenticated; it is accepted here. With ``requires`` (the user and the key),
-    it is closed when the user loses the key.
+    authenticated; it is accepted here. ``watcher``, if given, runs for as long
+    as the socket does.
     """
-    async with _serving(websocket, topic, requires):
+    async with _serving(websocket, topic, watcher):
         while True:
             await websocket.receive_text()
 

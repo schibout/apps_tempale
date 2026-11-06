@@ -8,14 +8,17 @@ production ones.
 import asyncio
 import uuid
 from collections.abc import AsyncIterator, Callable
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
+from fastapi import WebSocket
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.websockets import WebSocketState
 
 from app.api.deps import require_user_permission
 from app.core import realtime
@@ -23,10 +26,11 @@ from app.core.config import settings
 from app.core.messages.error_message import ErrorMessages
 from app.core.realtime import (
     account_topic,
-    close_on_permission_loss,
     notifications_topic,
     publish_safe,
+    serve_account_socket,
     user_topic,
+    watch_socket,
 )
 from app.core.security import create_access_token
 from app.main import app
@@ -54,12 +58,16 @@ from app.tests.admin.conftest import (
 from app.tests.conftest import TestingSessionLocal
 from app.tests.notifications.conftest import get_user_id, seed_notification
 from app.tests.support.conftest import PNG_BYTES, open_ticket
+from app.use_cases import socket_permissions
 from app.use_cases.permissions import (
     get_effective_permissions,
     invalidate_user_permissions,
 )
+from app.use_cases.socket_permissions import close_on_permission_loss
+from app.utils import utc_now
 
 POLICY_VIOLATION = 1008
+TRY_AGAIN_LATER = 1013
 SELF_PERMISSIONS = {key for key in Permission if is_self_permission(key)}
 PNG_UPLOAD = {"files": {"file": ("a.png", PNG_BYTES, "image/png")}}
 
@@ -254,7 +262,7 @@ class StubSocket:
 @pytest.fixture(autouse=True)
 def watcher_uses_test_database(monkeypatch: pytest.MonkeyPatch) -> None:
     """Point the socket watcher's own sessions at the test database."""
-    monkeypatch.setattr(realtime, "AsyncSessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(socket_permissions, "AsyncSessionLocal", TestingSessionLocal)
 
 
 @pytest_asyncio.fixture
@@ -518,6 +526,7 @@ async def test_socket_accepted_with_the_key_and_receives_its_feed(
     await realtime.manager.broadcast_local(topic(user.id), "frame")
     assert await socket.next_message() == {"type": "websocket.send", "text": "frame"}
     await socket.leave()
+    assert account_topic(user.id) not in realtime.manager._topics
 
 
 @pytest.mark.parametrize(("path", "permission", "topic"), GATED_SOCKETS, ids=SOCKET_IDS)
@@ -775,16 +784,16 @@ async def test_watcher_keeps_a_superadmin_connected():
 
 
 async def test_watcher_closes_when_it_cannot_recheck():
-    """A database failure fails closed instead of leaving the socket unguarded."""
+    """A database failure fails closed, with a code the client reconnects on."""
     user = await _seed_account()
     socket, watcher = await _watch(user, Permission.SELF_SUPPORT_READ)
 
     broken = MagicMock(side_effect=SQLAlchemyError("down"))
-    with patch.object(realtime, "AsyncSessionLocal", broken):
+    with patch.object(socket_permissions, "AsyncSessionLocal", broken):
         await _signal(user.id, AccountEventType.PERMISSIONS_UPDATED)
         await asyncio.wait_for(watcher, timeout=3)
 
-    assert socket.closed_with == POLICY_VIOLATION
+    assert socket.closed_with == TRY_AGAIN_LATER
 
 
 async def test_watcher_closes_when_its_first_check_fails():
@@ -792,14 +801,14 @@ async def test_watcher_closes_when_its_first_check_fails():
     user = await _seed_account()
     broken = MagicMock(side_effect=SQLAlchemyError("down"))
 
-    with patch.object(realtime, "AsyncSessionLocal", broken):
+    with patch.object(socket_permissions, "AsyncSessionLocal", broken):
         socket = StubSocket()
         await asyncio.wait_for(
             close_on_permission_loss(socket, user, Permission.SELF_SUPPORT_READ),
             timeout=3,
         )
 
-    assert socket.closed_with == POLICY_VIOLATION
+    assert socket.closed_with == TRY_AGAIN_LATER
 
 
 async def test_watcher_survives_a_socket_already_gone():
@@ -841,3 +850,213 @@ async def test_watcher_never_forwards_account_frames_to_the_socket():
     assert socket.frames == []
     assert socket.closed_with is None
     await _stop(watcher)
+
+
+async def test_failed_check_lets_the_handshake_decide_again():
+    """After a failure the reconnect is judged by the gate, both ways."""
+    user = await _seed_account()
+    broken = MagicMock(side_effect=SQLAlchemyError("down"))
+
+    with patch.object(socket_permissions, "AsyncSessionLocal", broken):
+        first = AsgiSocket("/support/ws", user.id)
+        assert (await first.handshake())["type"] == "websocket.accept"
+        assert (await first.next_message())["code"] == TRY_AGAIN_LATER
+        await first.leave()
+
+    second = AsgiSocket("/support/ws", user.id)
+    assert (await second.handshake())["type"] == "websocket.accept"
+    await _settle()
+    assert second.has_no_message()
+    await second.leave()
+
+    await _hold_only(user.id, set())
+    refused = await AsgiSocket("/support/ws", user.id).handshake()
+    assert refused["code"] == POLICY_VIOLATION
+
+
+# --- Bounded wait -------------------------------------------------------------
+
+
+async def _replace_with_expiring(user: User, via: str, expires_at: datetime) -> None:
+    """Leave the account holding the support keys only until ``expires_at``."""
+    await _hold_only(user.id, set())
+    async with TestingSessionLocal() as session:
+        if via == "role":
+            stmt = select(RbacRole.id).where(RbacRole.key == "user")
+            session.add(
+                RbacUserRole(
+                    user_id=user.id,
+                    role_id=(await session.execute(stmt)).scalar_one(),
+                    expires_at=expires_at,
+                )
+            )
+        else:
+            stmt = select(RbacPermissionSet.id).where(
+                RbacPermissionSet.key == "self.support"
+            )
+            session.add(
+                RbacUserPermissionSet(
+                    user_id=user.id,
+                    set_id=(await session.execute(stmt)).scalar_one(),
+                    expires_at=expires_at,
+                )
+            )
+        await session.commit()
+    await invalidate_user_permissions(user.id)
+
+
+async def test_lost_event_is_caught_by_the_periodic_check(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """With no event at all, a revocation still closes the socket."""
+    monkeypatch.setattr(settings, "RBAC_CACHE_TTL_SECONDS", 0.05)
+    user = await _seed_account()
+    socket, watcher = await _watch(user, Permission.SELF_SUPPORT_READ)
+    await _hold_only(user.id, set())
+
+    await asyncio.wait_for(watcher, timeout=3)
+
+    assert socket.closed_with == POLICY_VIOLATION
+
+
+async def test_periodic_check_leaves_a_valid_socket_open(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Waking up on the timer alone does not disturb an account keeping the key."""
+    monkeypatch.setattr(settings, "RBAC_CACHE_TTL_SECONDS", 0.02)
+    user = await _seed_account()
+    socket, watcher = await _watch(user, Permission.SELF_SUPPORT_READ)
+
+    await asyncio.sleep(0.2)
+
+    assert socket.closed_with is None
+    await _stop(watcher)
+
+
+@pytest.mark.parametrize("via", ["role", "set"])
+async def test_expiring_assignment_closes_the_socket_on_time(via: str):
+    """An expiry raises no event: the wait is cut short so the socket still closes."""
+    assert settings.RBAC_CACHE_TTL_SECONDS >= 60
+    user = await _seed_account()
+    await _replace_with_expiring(user, via, utc_now() + timedelta(seconds=0.6))
+    socket, watcher = await _watch(user, Permission.SELF_SUPPORT_READ)
+    assert socket.closed_with is None
+
+    await asyncio.wait_for(watcher, timeout=3)
+
+    assert socket.closed_with == POLICY_VIOLATION
+
+
+async def test_expired_support_read_closes_a_live_route_socket():
+    """The same end to end: the feed stops with no event once the role expired."""
+    user = await _seed_account()
+    await _replace_with_expiring(user, "role", utc_now() + timedelta(seconds=0.6))
+    socket = AsgiSocket("/support/ws", user.id)
+    assert (await socket.handshake())["type"] == "websocket.accept"
+
+    assert (await socket.next_message())["code"] == POLICY_VIOLATION
+    await socket.leave()
+
+
+async def test_recheck_period_is_jittered_and_capped_by_the_next_expiry():
+    """Without a near expiry the period holds; a near one shortens it."""
+    period = settings.RBAC_CACHE_TTL_SECONDS
+    user = await _seed_account()
+    check = Permission.SELF_SUPPORT_READ
+
+    delays = {await socket_permissions._recheck_in(user.id, check) for _ in range(5)}
+    assert len(delays) > 1
+    assert all(period <= delay <= period * 1.1 for delay in delays)
+
+    await _replace_with_expiring(user, "role", utc_now() + timedelta(seconds=30))
+    capped = await socket_permissions._recheck_in(user.id, check)
+    assert 0 < capped <= 30
+
+    await _replace_with_expiring(user, "role", utc_now() + timedelta(days=1))
+    assert await socket_permissions._recheck_in(user.id, check) >= period
+
+
+# --- watch_socket, independently of any permission ------------------------------
+
+
+async def test_watch_socket_rechecks_on_its_own_until_refused():
+    """The transport follows the delay it is given, then closes on the refusal."""
+    answers = iter([0.01, 0.01, None])
+    calls = 0
+
+    async def check() -> float | None:
+        """Allow twice, then refuse."""
+        nonlocal calls
+        calls += 1
+        return next(answers)
+
+    socket = StubSocket()
+    await asyncio.wait_for(watch_socket(socket, topic="any", check=check), timeout=3)
+
+    assert calls == 3
+    assert socket.closed_with == POLICY_VIOLATION
+    assert "any" not in realtime.manager._topics
+
+
+async def test_watch_socket_separates_not_knowing_from_a_refusal():
+    """A check that raises closes with the code clients reconnect on."""
+
+    async def check() -> float | None:
+        """Fail to answer."""
+        raise SQLAlchemyError("down")
+
+    socket = StubSocket()
+    await asyncio.wait_for(watch_socket(socket, topic="any", check=check), timeout=3)
+
+    assert socket.closed_with == TRY_AGAIN_LATER
+
+
+# --- A frame racing the close -----------------------------------------------------
+
+
+async def test_frame_racing_the_close_ends_the_socket_quietly():
+    """A frame already read when the watch closes must not raise from the loop."""
+    sent: list[dict] = []
+    moments = iter(["connect", "frame"])
+
+    async def receive() -> dict:
+        """Play the handshake, then deliver a frame as the close goes out."""
+        if next(moments) == "connect":
+            return {"type": "websocket.connect"}
+        await websocket.close(code=POLICY_VIOLATION)
+        return {"type": "websocket.receive", "text": "late"}
+
+    async def send(message: dict) -> None:
+        """Capture what the server sends."""
+        sent.append(message)
+
+    websocket = WebSocket(
+        {"type": "websocket", "path": "/", "headers": [], "query_string": b""},
+        receive,
+        send,
+    )
+
+    await asyncio.wait_for(serve_account_socket(websocket, topic="racing"), timeout=3)
+
+    assert sent[-1]["type"] == "websocket.close"
+    assert "racing" not in realtime.manager._topics
+
+
+async def test_runtime_error_on_an_open_socket_still_surfaces():
+    """Only the race with a close is swallowed, never a genuine failure."""
+
+    class BrokenSocket(StubSocket):
+        """Stays connected while its read fails."""
+
+        application_state = WebSocketState.CONNECTED
+
+        async def accept(self) -> None:
+            """Accept the handshake."""
+
+        async def receive_text(self) -> str:
+            """Fail with an error that has nothing to do with a close."""
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await serve_account_socket(BrokenSocket(), topic="broken")
+    assert "broken" not in realtime.manager._topics
