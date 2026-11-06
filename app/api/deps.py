@@ -404,4 +404,5 @@ def require_permissions(
                     await ensure_permission(session, admin, permission)
         return admin
 
+    _require.__rbac_permission__ = base
     return _require

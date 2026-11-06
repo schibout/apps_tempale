@@ -139,6 +139,16 @@ These are non-negotiable:
 - Rate limiting is handled via `slowapi` — configure in `app/core/`
 - First superuser is seeded automatically on startup using `FIRST_SUPERUSER` and `FIRST_SUPERUSER_PASSWORD`
 
+### RBAC
+
+- Permissions are `Permission` keys grouped into permission sets, sets into roles (`rbac_*` tables, system content in `app/core/rbac_catalog.py`). Effective permissions = roles + directly granted sets; superadmins bypass admin keys
+- Guard routes with `require_permission`, `require_any_permission`, `require_permissions` (admin keys) or `require_user_permission` (`self.*` keys); each sets `__rbac_permission__` on its dependency
+- **A permission is born with its route**: a new route must declare a permission (admin keys on `/admin/*`, `self.*` elsewhere) in the same change, and a new `Permission` needs its catalog entry and frontend labels. `app/tests/test_rbac_route_coverage.py` fails for any unclassified route; fix the route, not the lists
+- The **socle** stays outside RBAC: `/auth/*`, `GET /users/me`, `/users/me/events`, `/users/me/sessions*`, `DELETE /users/me`, `POST /users/me/reactivate`, `/settings/public`, `/announcements/active` (plus health, metrics, docs). It is frozen in `SOCLE_ROUTES`
+- Only `transfer-root`, `promote` and `demote` stay superadmin-only (`CurrentSuperAdmin`)
+- Admin MFA is dormant (`ADMIN_MFA_REQUIRED=False`) and step-up authentication does not exist
+- `database/` SQL scripts are regenerated after a migration: `uv run --with alembic --with sqlalchemy database/tools/generate.py` from `apps`
+
 ---
 
 ## Git Workflow

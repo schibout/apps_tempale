@@ -334,9 +334,9 @@ Three roles layer the admin surface from least to most privileged:
 | `superadmin` | Bypasses all permission checks; creates/deletes admins and assigns their permissions. |
 | `superadmin` *(root)* | The first seeded superadmin (`is_root_superadmin`). Additionally owns the **superadmin tier**: promote an admin to superadmin, demote a superadmin, and transfer root. |
 
-**Permission model.** Permissions are `resource:action` keys — `users:read`, `users:write`, `users:delete`, `users:suspend`, `users:password_reset`, `files:read`, `files:delete`, `support:read`, `support:write`, `support:update`, `activities:read`, `stats:read` (12 in total). A plain admin's grants live in the `admin_permission` table; superadmins implicitly hold all of them.
+**Permission model.** Permissions are `resource:action` keys (33 in `Permission`): admin keys such as `users:read`, `users:suspend`, `support:write`, `roles:write`, `admins:write`, and `self.*` keys for ordinary accounts (`self.profile:update`, `self.files:upload`, `self.notifications:read`, `self.support:read|create|reply|close`). Keys are grouped into **permission sets** and sets into **roles** (`rbac_permission_set`, `rbac_role`, joined by `rbac_role_permission_set`). An account's effective permissions are the union of its roles (`rbac_user_role`) and the sets granted to it directly (`rbac_user_permission_set`), each assignment with an optional expiry. System roles and sets (`user`, `administrator`, `support_agent`, `auditor`, ...) are defined in `app/core/rbac_catalog.py` and seeded at startup; custom ones are managed under `/admin/rbac/*` (`roles:*` and `permission_sets:*`) and per account under `/admin/users/{id}/access`, `/roles` and `/permission-sets`. Each role and set has an audience (`admin` or `user`) restricting the keys it may hold. Superadmins implicitly hold every admin key and have no assignments. The legacy `admin_permission` table is kept for history only.
 
-**Enforcement.** Every admin endpoint declares exactly what it needs with one dependency:
+**Enforcement.** Every route declares exactly what it needs with one dependency:
 
 ```python
 @router.get("")
@@ -346,7 +346,11 @@ async def list_users(
 ): ...
 ```
 
-`require_permission` chains auth → active account → admin role → grant lookup, and superadmins short-circuit. Payload-conditional actions are enforced on the same layer (reassigning a ticket needs `support:update`). `GET /users/me` returns the caller's `permissions` (for admins only) plus `is_root_superadmin`, so the frontend mirrors the exact gating.
+`require_permission` (admin keys), `require_any_permission`, `require_permissions` (base key plus body-conditional keys) and `require_user_permission` (`self.*` keys on any active account) chain auth, account state and the effective-permission lookup; each labels its dependency with `__rbac_permission__`. `GET /users/me` returns the caller's effective `permissions` plus `is_root_superadmin`, so the frontend mirrors the exact gating.
+
+**The socle stays outside RBAC:** `/auth/*`, `GET /users/me`, `/users/me/events`, `/users/me/sessions*`, `DELETE /users/me`, `POST /users/me/reactivate`, `/settings/public`, `/announcements/active`, plus health, metrics and docs routes. Admin MFA is dormant (`ADMIN_MFA_REQUIRED=False`) and there is no step-up authentication.
+
+**A permission is born with its route.** `app/tests/test_rbac_route_coverage.py` walks `app.routes` and fails for any route that carries neither a permission (admin keys on `/admin/*`, `self.*` elsewhere) nor an entry in `SOCLE_ROUTES` or the justified superadmin-only list (`transfer-root`, `promote`, `demote`). Fix the route, not the list.
 
 **Hard invariants** (`services/admin/`):
 
@@ -355,7 +359,7 @@ async def list_users(
 - The root superadmin's own role is immutable; it can only be handed over via the **email-OTP root transfer** (a one-time code is sent to the current root's address).
 - A superadmin can only be modified/deleted by another superadmin, and the **last active superadmin** is always protected.
 
-**Managing admins** (superadmin-only — `routes/admin/admins.py`):
+**Managing admins** (`routes/admin/admins.py`; read/write/delete need `admins:*`, the superadmin tier is root-only):
 
 | Method & path | Purpose |
 | --- | --- |
