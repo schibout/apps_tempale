@@ -31,8 +31,8 @@ export interface User {
   deletion_scheduled_at: string | null;
   suspended_at: string | null;
   avatar_file?: FilePublic | null;
-  // Present only for admin accounts (omitted entirely for regular users and
-  // superadmins). The grant set powering the per-permission UI gates.
+  // The keys the account can use, powering the per-permission UI gates. Omitted
+  // entirely for superadmins, who hold every key by role.
   permissions?: Permission[];
 }
 

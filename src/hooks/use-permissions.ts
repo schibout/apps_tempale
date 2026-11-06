@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth.store";
 export interface PermissionsApi {
   /** True when the current user is a superadmin (implicitly holds everything). */
   isSuperadmin: boolean;
-  /** The granted permission keys (empty for regular users and superadmins). */
+  /** The permission keys the account can use (empty for superadmins). */
   permissions: Permission[];
   /** Whether the current user may exercise a given permission. */
   has: (permission: Permission) => boolean;
@@ -17,8 +17,9 @@ export interface PermissionsApi {
  * Read the current user's RBAC capabilities from the auth store.
  *
  * Superadmins short-circuit to `true` for every check via their role, so the
- * backend never has to ship them a permission list. Plain admins are gated by
- * the grants delivered on `/users/me`.
+ * backend never has to ship them a permission list. Every other account, regular
+ * users included, is gated by the effective permissions delivered on `/users/me`:
+ * the union of its roles, permission sets and direct grants.
  */
 export function usePermissions(): PermissionsApi {
   const user = useAuthStore((state) => state.user);
