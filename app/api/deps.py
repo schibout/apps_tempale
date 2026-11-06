@@ -315,6 +315,31 @@ def require_permission(permission: Permission) -> Callable[..., Awaitable[User]]
     return _require
 
 
+def require_any_permission(
+    *permissions: Permission,
+) -> Callable[..., Awaitable[User]]:
+    """Build a dependency passing when the admin holds at least one permission.
+
+    Same auth and admin-tier checks as ``require_permission``; superadmins pass
+    through ``ensure_permission``. The refusal is the usual 403 when none is held.
+    """
+    if not permissions:
+        raise ValueError("at least one permission is required")
+
+    async def _require(admin: CurrentAdminUser, session: SessionDep) -> User:
+        """Enforce that one of the captured permissions is held."""
+        for permission in permissions:
+            if await user_has_permission(session, admin, permission):
+                return admin
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.INSUFFICIENT_PERMISSIONS,
+        )
+
+    _require.__rbac_permission__ = permissions
+    return _require
+
+
 def require_user_permission(permission: Permission) -> Callable[..., Awaitable[User]]:
     """Build a dependency enforcing a permission on any active account.
 

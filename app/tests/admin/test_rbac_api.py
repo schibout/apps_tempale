@@ -243,6 +243,20 @@ def _role_payload(key: str = "custom_role", **overrides: object) -> dict:
 
 
 @pytest.mark.asyncio
+async def test_permission_catalog_needs_roles_read_or_permission_sets_read(
+    make_client: MakeClient,
+):
+    """Either read key opens the catalog; an admin holding neither is refused."""
+    neither = await make_client("neither@test.com", permissions=[Permission.USERS_READ])
+    assert (await neither.get("/admin/rbac/permissions")).status_code == 403
+
+    for index, key in enumerate(
+        (Permission.ROLES_READ, Permission.PERMISSION_SETS_READ)
+    ):
+        client = await make_client(f"either{index}@test.com", permissions=[key])
+        assert (await client.get("/admin/rbac/permissions")).status_code == 200
+
+
 async def test_permission_catalog_needs_roles_read(make_client: MakeClient):
     """The key catalog gives key, resource, action and audience, behind roles:read."""
     refused = await make_client("none@test.com")

@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 
 from app.api.decorators import audit_unexpected_failure
-from app.api.deps import SessionDep, require_permission
+from app.api.deps import SessionDep, require_any_permission, require_permission
 from app.models.user import User
 from app.schemas.admin_permission import Permission
 from app.schemas.msg import Message
@@ -47,12 +47,19 @@ SetsRead = Annotated[User, Depends(require_permission(Permission.PERMISSION_SETS
 SetsWrite = Annotated[
     User, Depends(require_permission(Permission.PERMISSION_SETS_WRITE))
 ]
+# The key catalog feeds the permission-set grid as much as the role pages.
+CatalogRead = Annotated[
+    User,
+    Depends(
+        require_any_permission(Permission.ROLES_READ, Permission.PERMISSION_SETS_READ)
+    ),
+]
 UsersRead = Annotated[User, Depends(require_permission(Permission.USERS_READ))]
 UsersWrite = Annotated[User, Depends(require_permission(Permission.USERS_WRITE))]
 
 
 @router.get("/rbac/permissions", response_model=RbacPermissionCatalog)
-async def list_rbac_permissions(_admin: RolesRead) -> RbacPermissionCatalog:
+async def list_rbac_permissions(_admin: CatalogRead) -> RbacPermissionCatalog:
     """Return every permission key with its resource, action and audience."""
     return get_rbac_permission_catalog_service()
 

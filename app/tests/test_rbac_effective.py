@@ -19,6 +19,7 @@ from sqlalchemy import delete, select, update
 from app.api.deps import (
     ensure_permission,
     get_current_active_user,
+    require_any_permission,
     require_permission,
     require_user_permission,
     user_has_permission,
@@ -419,6 +420,29 @@ async def test_factories_expose_their_permission():
         require_user_permission(Permission.SELF_SUPPORT_READ).__rbac_permission__
         == Permission.SELF_SUPPORT_READ
     )
+
+
+async def test_require_any_permission_exposes_the_tuple_and_needs_one_key():
+    """The any-of factory labels its keys and refuses an admin holding none."""
+    dependency = require_any_permission(
+        Permission.ROLES_READ, Permission.PERMISSION_SETS_READ
+    )
+    assert dependency.__rbac_permission__ == (
+        Permission.ROLES_READ,
+        Permission.PERMISSION_SETS_READ,
+    )
+
+    admin = await _make_user(SystemRole.ADMIN)
+    await _grant(admin, Permission.USERS_READ)
+    async with TestingSessionLocal() as session:
+        with pytest.raises(HTTPException) as caught:
+            await dependency(admin, session)
+    assert caught.value.status_code == 403
+
+    await _grant(admin, Permission.PERMISSION_SETS_READ)
+    await invalidate_user_permissions(admin.id)
+    async with TestingSessionLocal() as session:
+        assert await dependency(admin, session) is admin
 
 
 async def test_require_user_permission_accepts_regular_user_holding_the_key():
