@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import secrets
 import string
 import uuid
@@ -318,3 +320,16 @@ def verify_new_account_token(token: str) -> str | None:
         Email on success, ``None`` otherwise
     """
     return _verify_email_token(token, "new_account")
+
+
+def actor_reference(value: str) -> str:
+    """Return the HMAC-SHA256 hex digest of a normalized identifier.
+
+    Lets audit rows reference an actor (deleted account, unknown email)
+    without storing the plain value. The key is ``SECRET_KEY``.
+    """
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        value.strip().lower().encode(),
+        hashlib.sha256,
+    ).hexdigest()

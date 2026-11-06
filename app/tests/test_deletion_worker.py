@@ -168,3 +168,39 @@ async def test_suspended_user_is_never_due_for_deletion():
 
         due = await get_users_due_for_deletion(session, now=utc_now(), limit=10)
         assert all(u.email != "suspended-worker@test.com" for u in due)
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_keeps_anonymized_activity(monkeypatch):
+    """The worker keeps a deleted account's audit rows, anonymized."""
+    import app.worker.jobs.delete_expired_accounts as mod
+    from app.core.security import actor_reference
+    from app.models.user_activity import UserActivity
+
+    monkeypatch.setattr(mod, "AsyncSessionLocal", TestingSessionLocal)
+
+    user = await _make_user(
+        "bulk-anon@test.com", scheduled_at=utc_now() - timedelta(hours=1)
+    )
+    async with TestingSessionLocal() as session:
+        activity = UserActivity(
+            user_id=user.id,
+            activity_type="login",
+            resource_type="auth",
+            details={"email": "bulk-anon@test.com", "reason": "x"},
+            ip_address="1.2.3.4",
+            user_agent="UA",
+        )
+        session.add(activity)
+        await session.commit()
+        activity_id = activity.id
+
+    result = await delete_expired_accounts({})
+    assert result.processed == 1
+
+    async with TestingSessionLocal() as session:
+        row = await session.get(UserActivity, activity_id)
+    assert row.user_id is None and row.user_deleted_at is not None
+    assert row.actor_ref == actor_reference(str(user.id))
+    assert row.ip_address is None and row.user_agent is None
+    assert "email" not in row.details

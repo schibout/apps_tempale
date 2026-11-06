@@ -34,10 +34,19 @@ class UserActivity(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"),
+    # Nullable: the row outlives its account (FK SET NULL) so the audit trail
+    # survives deletion, and unknown-email login attempts have no account.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
         index=True,
-        nullable=False,
+        nullable=True,
+    )
+    # HMAC of the actor (user id once deleted, email for unknown logins), so
+    # rows stay correlatable without storing any plain identifier.
+    actor_ref: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
+    # Set when the owning account was deleted; starts the retention clock.
+    user_deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None, index=True
     )
 
     # Enums stored as strings
@@ -66,4 +75,4 @@ class UserActivity(Base):
     )
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="activities")
+    user: Mapped["User | None"] = relationship("User", back_populates="activities")

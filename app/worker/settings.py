@@ -11,6 +11,7 @@ from arq.cron import cron
 
 from app.core.config import settings
 from app.worker.jobs.delete_expired_accounts import delete_expired_accounts
+from app.worker.jobs.purge_anonymized_activities import purge_anonymized_activities
 from app.worker.jobs.purge_stale_sessions import purge_stale_sessions
 from app.worker.jobs.send_broadcast_emails import send_broadcast_emails
 
@@ -27,6 +28,7 @@ class WorkerSettings:
     functions: list = [
         delete_expired_accounts,
         purge_stale_sessions,
+        purge_anonymized_activities,
         send_broadcast_emails,
     ]
     cron_jobs = [
@@ -40,6 +42,12 @@ class WorkerSettings:
             purge_stale_sessions,
             hour={settings.SESSION_PURGE_CRON_HOUR},
             minute={settings.SESSION_PURGE_CRON_MINUTE},
+            run_at_startup=False,
+        ),
+        cron(
+            purge_anonymized_activities,
+            hour={settings.AUDIT_PURGE_CRON_HOUR},
+            minute={settings.AUDIT_PURGE_CRON_MINUTE},
             run_at_startup=False,
         ),
     ]

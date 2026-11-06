@@ -134,3 +134,129 @@ async def test_log_activity_persists_failure_status_code(db_session: AsyncSessio
 
     assert activity.status == ActivityStatus.FAILURE.value
     assert activity.status_code == 401
+
+
+async def _seed_user_with_activity(email: str) -> tuple[uuid.UUID, uuid.UUID]:
+    """Insert a user plus one PII-laden activity; return (user_id, activity_id)."""
+    async with TestingSessionLocal() as session:
+        user = User(
+            email=email,
+            hashed_password="hashed_dummy_password",
+            is_active=True,
+        )
+        session.add(user)
+        await session.commit()
+        activity = UserActivity(
+            user_id=user.id,
+            activity_type="login",
+            resource_type="auth",
+            details={"reason": "x", "email": email, "ip_address": "1.2.3.4"},
+            ip_address="1.2.3.4",
+            user_agent="Mozilla/5.0",
+        )
+        session.add(activity)
+        await session.commit()
+        return user.id, activity.id
+
+
+async def _get_activity(activity_id: uuid.UUID) -> UserActivity | None:
+    """Reload an activity row with a fresh session."""
+    async with TestingSessionLocal() as session:
+        return await session.get(UserActivity, activity_id)
+
+
+@pytest.mark.asyncio
+async def test_hard_delete_keeps_anonymized_activity():
+    """Hard-deleting a user keeps their audit rows, stripped of PII."""
+    from app.core.security import actor_reference
+    from app.repositories.user import hard_delete_user
+
+    user_id, activity_id = await _seed_user_with_activity("anon-hard@test.com")
+    async with TestingSessionLocal() as session:
+        user = await session.get(User, user_id)
+        await hard_delete_user(session, user)
+
+    row = await _get_activity(activity_id)
+    assert row.user_id is None and row.user_deleted_at is not None
+    assert row.actor_ref == actor_reference(str(user_id))
+    assert row.ip_address is None and row.user_agent is None
+    assert "email" not in row.details and "ip_address" not in row.details
+    assert row.details["reason"] == "x"
+
+
+@pytest.mark.asyncio
+async def test_activity_about_deleted_user_loses_pii():
+    """Rows by another actor about a deleted account lose PII but keep the actor."""
+    from app.repositories.user import hard_delete_user
+
+    target_id, _ = await _seed_user_with_activity("anon-target@test.com")
+    admin_id, _ = await _seed_user_with_activity("anon-admin@test.com")
+    async with TestingSessionLocal() as session:
+        row = UserActivity(
+            user_id=admin_id,
+            activity_type="delete",
+            resource_type="user",
+            resource_id=target_id,
+            details={"action": "admin_deleted_user", "email": "anon-target@test.com"},
+            ip_address="9.9.9.9",
+        )
+        session.add(row)
+        await session.commit()
+        about_id = row.id
+        user = await session.get(User, target_id)
+        await hard_delete_user(session, user)
+
+    row = await _get_activity(about_id)
+    assert row.user_id == admin_id and "email" not in row.details
+    assert row.details["action"] == "admin_deleted_user"
+    assert row.ip_address == "9.9.9.9"
+    assert row.user_deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_purge_keeps_rows_until_retention_elapses():
+    """Anonymized rows are purged after the cutoff; live-account rows never are."""
+    from datetime import timedelta
+
+    from app.repositories.user_activity import purge_anonymized_activities
+    from app.utils import utc_now
+
+    now = utc_now()
+    _, live_activity = await _seed_user_with_activity("purge-live@test.com")
+    ids = {}
+    async with TestingSessionLocal() as session:
+        for name, days in (("recent", 364), ("old", 366)):
+            row = UserActivity(
+                user_id=None,
+                actor_ref="a" * 64,
+                activity_type="login",
+                resource_type="auth",
+                details={},
+                user_deleted_at=now - timedelta(days=days),
+            )
+            session.add(row)
+            await session.flush()
+            ids[name] = row.id
+        # Unknown-email row (never had an account), old by created_at only.
+        row = UserActivity(
+            user_id=None,
+            actor_ref="b" * 64,
+            activity_type="login",
+            resource_type="auth",
+            details={},
+            created_at=now - timedelta(days=400),
+        )
+        session.add(row)
+        await session.flush()
+        ids["unknown_old"] = row.id
+        await session.commit()
+
+    async with TestingSessionLocal() as session:
+        purged = await purge_anonymized_activities(
+            session, cutoff=now - timedelta(days=365), batch_size=1
+        )
+    assert purged == 2
+    assert await _get_activity(ids["recent"]) is not None
+    assert await _get_activity(ids["old"]) is None
+    assert await _get_activity(ids["unknown_old"]) is None
+    assert await _get_activity(live_activity) is not None

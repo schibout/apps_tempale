@@ -89,12 +89,11 @@ class User(Base):
         default=None,
     )
 
-    # passive_deletes=True lets Postgres handle the cascade via the FK's
-    # ON DELETE CASCADE — a single DELETE statement instead of one per row.
+    # passive_deletes=True lets Postgres apply the FK's ON DELETE SET NULL;
+    # activities are kept (anonymized) when the account is deleted.
     activities: Mapped[list["UserActivity"]] = relationship(
         "UserActivity",
         back_populates="user",
-        cascade="all, delete-orphan",
         passive_deletes=True,
     )
 

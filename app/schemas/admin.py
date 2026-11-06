@@ -126,7 +126,8 @@ class AdminActivityItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    user_id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    actor_ref: str | None = None
     user: AdminActorRef | None = None
     activity_type: ActivityType
     resource_type: ResourceType

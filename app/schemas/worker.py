@@ -20,6 +20,13 @@ class SessionPurgeJobResult(BaseModel):
     duration_ms: int = Field(ge=0, description="Total wall-clock time in ms.")
 
 
+class AuditPurgeJobResult(BaseModel):
+    """Outcome of a single run of the anonymized-audit purge job."""
+
+    purged: int = Field(ge=0, description="Audit rows deleted this run.")
+    duration_ms: int = Field(ge=0, description="Total wall-clock time in ms.")
+
+
 class BroadcastEmailJobResult(BaseModel):
     """Outcome of a single broadcast-email fan-out job."""
 

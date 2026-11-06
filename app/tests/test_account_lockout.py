@@ -97,3 +97,47 @@ async def test_authenticate_locks_and_emails(client: AsyncClient, mock_email_sen
                 request=None, session=session, email=email, password=password
             )
         assert exc.value.status_code == 423
+
+
+@pytest.mark.asyncio
+async def test_failed_login_unknown_email_is_audited_without_plain_email():
+    """A login on an unknown email is audited with a hashed reference only."""
+    import json
+    from unittest.mock import MagicMock
+
+    from sqlalchemy import select
+
+    from app.core.security import actor_reference
+    from app.models.user_activity import UserActivity
+
+    request = MagicMock()
+    request.client.host = "10.0.0.1"
+    request.headers = {"user-agent": "pytest"}
+
+    async with TestingSessionLocal() as session:
+        with pytest.raises(HTTPException) as exc:
+            await authenticate(
+                request=request,
+                session=session,
+                email="nobody@example.com",
+                password="whatever",
+            )
+        assert exc.value.status_code == 401
+
+    async with TestingSessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(UserActivity).where(
+                        UserActivity.actor_ref == actor_reference("nobody@example.com")
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.user_id is None
+    assert "nobody@example.com" not in json.dumps(row.details)
+    assert row.status_code == 401

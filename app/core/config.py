@@ -132,6 +132,12 @@ class Settings(BaseSettings):
     SESSION_PURGE_CRON_HOUR: int = 4
     SESSION_PURGE_CRON_MINUTE: int = 0
 
+    # Audit rows kept after their account is deleted (or for unknown-email
+    # logins) are purged after this many days by a nightly job.
+    ANONYMIZED_AUDIT_RETENTION_DAYS: int = 365
+    AUDIT_PURGE_CRON_HOUR: int = 5
+    AUDIT_PURGE_CRON_MINUTE: int = 0
+
     # Broadcast email fan-out: recipients are emailed in batches with a pause
     # between them to stay within the email provider's rate limits.
     BROADCAST_EMAIL_BATCH_SIZE: int = 50

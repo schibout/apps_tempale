@@ -6,6 +6,7 @@ from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.repositories.user_activity import anonymize_user_activities
 from app.schemas.announcement import AnnouncementAudience
 from app.schemas.user import SystemRole
 from app.utils import utc_now
@@ -155,7 +156,8 @@ async def get_users_due_for_deletion(
 
 
 async def hard_delete_user(session: AsyncSession, user: User) -> None:
-    """Permanently remove a user. Child rows cascade at the DB level."""
+    """Permanently remove a user, keeping their audit trail anonymized."""
+    await anonymize_user_activities(session, [user.id], utc_now())
     await session.delete(user)
     await session.commit()
 
@@ -165,18 +167,24 @@ async def bulk_hard_delete_users(
 ) -> int:
     """Delete many users in a single SQL statement.
 
-    Relies on the ``ON DELETE CASCADE`` foreign key from ``user_activity``
-    so no ORM-level fan-out is required. Returns the number of rows removed.
-    The caller owns the transaction boundary.
+    The users' audit rows are anonymized first, in the same transaction; the
+    ``ON DELETE SET NULL`` foreign key from ``user_activity`` then detaches
+    them. Returns the number of rows removed. The caller owns the transaction
+    boundary.
     """
     if not user_ids:
         return 0
+    await anonymize_user_activities(session, user_ids, utc_now())
     result = await session.execute(delete(User).where(User.id.in_(list(user_ids))))
     return result.rowcount or 0
 
 
 async def delete_user(session: AsyncSession, db_user: User) -> None:
-    """Hard-delete a user and commit. Caller owns the detach before calling."""
+    """Hard-delete a user and commit, keeping their audit trail anonymized.
+
+    Caller owns the detach before calling.
+    """
+    await anonymize_user_activities(session, [db_user.id], utc_now())
     await session.delete(db_user)
     await session.commit()
 

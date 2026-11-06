@@ -10,6 +10,7 @@ from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
 from app.core.realtime import account_topic, publish_safe
 from app.core.security import (
+    actor_reference,
     aget_password_hash,
     averify_password,
     create_access_token,
@@ -185,6 +186,21 @@ async def authenticate(
                 status=ActivityStatus.FAILURE,
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 details={"reason": "invalid_password", "email": email},
+                request=request,
+            )
+
+        # Unknown email: audit it with a hashed reference only, never the
+        # plain address (no account exists to attach the row to).
+        if not user and request:
+            await log_activity(
+                session=session,
+                user_id=None,
+                actor_ref=actor_reference(email),
+                activity_type=ActivityType.LOGIN,
+                resource_type=ResourceType.AUTH,
+                status=ActivityStatus.FAILURE,
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                details={"reason": "unknown_email"},
                 request=request,
             )
 

@@ -42,7 +42,8 @@ class ActivityStatus(StrEnum):
 class UserActivityCreate(BaseModel):
     """Schema for creating a user activity log."""
 
-    user_id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    actor_ref: str | None = None
     activity_type: ActivityType
     resource_type: ResourceType
     resource_id: uuid.UUID | None = None
