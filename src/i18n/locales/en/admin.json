@@ -107,6 +107,7 @@
       "password_reset": "Reset password",
       "sessions": "Manage sessions",
       "unlock": "Unlock accounts",
+      "mfa_reset": "Reset MFA",
       "update": "Assign"
     }
   },

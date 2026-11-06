@@ -10,6 +10,7 @@ export enum Permission {
   UsersPasswordReset = "users:password_reset",
   UsersSessions = "users:sessions",
   UsersUnlock = "users:unlock",
+  UsersMfaReset = "users:mfa_reset",
   FilesRead = "files:read",
   FilesDelete = "files:delete",
   SupportRead = "support:read",

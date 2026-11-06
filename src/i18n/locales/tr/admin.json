@@ -107,6 +107,7 @@
       "password_reset": "Şifre sıfırla",
       "sessions": "Oturumları yönet",
       "unlock": "Hesap kilidini aç",
+      "mfa_reset": "MFA sıfırla",
       "update": "Ata"
     }
   },
