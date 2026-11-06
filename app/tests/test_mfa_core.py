@@ -47,6 +47,8 @@ def test_wrong_totp_code_is_rejected() -> None:
     bad = "000000" if good != "000000" else "111111"
     assert mfa.verify_totp(secret, bad, None) is None
     assert mfa.verify_totp(secret, "abc", None) is None
+    assert mfa.verify_totp(secret, "١٢٣٤٥٦", None) is None
+    assert mfa.verify_totp(secret, "²" * 6, None) is None
 
 
 def test_replayed_totp_code_is_rejected() -> None:
