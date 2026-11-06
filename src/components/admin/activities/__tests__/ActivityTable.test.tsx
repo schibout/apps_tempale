@@ -8,6 +8,7 @@ const makeRow = (overrides: Partial<AdminActivity> = {}): AdminActivity => ({
   id: "a-1",
   user_id: "user-123",
   actor_ref: null,
+  user_deleted_at: null,
   user: null,
   activity_type: "login",
   resource_type: "auth",
@@ -64,10 +65,32 @@ describe("ActivityTable", () => {
   it("labels a deleted account with the first 8 chars of actor_ref", () => {
     render(
       <ActivityTable
-        rows={[makeRow({ user_id: null, actor_ref: "abcdef0123456789", user: null })]}
+        rows={[
+          makeRow({
+            user_id: null,
+            actor_ref: "abcdef0123456789",
+            user_deleted_at: "2026-04-20T12:00:00Z",
+            user: null,
+          }),
+        ]}
       />,
     );
     expect(screen.getByText(/activities\.deletedAccount abcdef01$/)).toBeInTheDocument();
+  });
+
+  it("labels a row that never had an account as unknown, with the actor_ref prefix", () => {
+    render(
+      <ActivityTable
+        rows={[makeRow({ user_id: null, actor_ref: "abcdef0123456789", user: null })]}
+      />,
+    );
+    expect(screen.getByText(/activities\.unknownAccount abcdef01$/)).toBeInTheDocument();
+    expect(screen.queryByText(/activities\.deletedAccount/)).not.toBeInTheDocument();
+  });
+
+  it("labels a row with neither user nor actor_ref as unknown, without a suffix", () => {
+    render(<ActivityTable rows={[makeRow({ user_id: null, actor_ref: null, user: null })]} />);
+    expect(screen.getByText(/activities\.unknownAccount$/)).toBeInTheDocument();
   });
 
   it("shows the actor's name when the activity embeds a user", () => {

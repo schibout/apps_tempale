@@ -363,9 +363,12 @@
       "user": "User",
       "auth": "Auth",
       "file": "File",
-      "support_ticket": "Support ticket"
+      "support_ticket": "Support ticket",
+      "system_settings": "System settings",
+      "announcement": "Announcement"
     },
     "deletedAccount": "Deleted account",
+    "unknownAccount": "Unknown account",
     "empty": "No activity matches the current filters.",
     "loading": "Loading activity..."
   }

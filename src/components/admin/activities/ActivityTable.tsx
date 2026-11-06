@@ -30,13 +30,15 @@ const statusCodeTone = (code: number): "success" | "warning" | "danger" | "muted
   return "muted";
 };
 
-// Prefer the actor's name, then email. Rows whose account was deleted keep an
-// anonymized actor_ref: show a "deleted account" label with its first 8 chars.
-const actorLabel = (row: AdminActivity, deletedLabel: string): string => {
+// Prefer the actor's name, then email. Without a user, say "deleted account" only
+// when the row records a deletion: others (such as unknown-email logins) never had
+// one and read as "unknown account". Either way, add actor_ref's first 8 chars.
+const actorLabel = (row: AdminActivity, deletedLabel: string, unknownLabel: string): string => {
   const actor = row.user;
   if (!actor) {
-    const short = (row.actor_ref ?? row.user_id ?? "").slice(0, 8);
-    return short ? `${deletedLabel} ${short}` : deletedLabel;
+    const label = row.user_deleted_at ? deletedLabel : unknownLabel;
+    const short = (row.actor_ref ?? "").slice(0, 8);
+    return short ? `${label} ${short}` : label;
   }
   return [actor.first_name, actor.last_name].filter(Boolean).join(" ") || actor.email;
 };
@@ -129,7 +131,7 @@ export function ActivityTable({
             </AdminTd>
             {showUser ? (
               <AdminTd className="text-xs text-muted-foreground">
-                {actorLabel(row, t("activities.deletedAccount"))}
+                {actorLabel(row, t("activities.deletedAccount"), t("activities.unknownAccount"))}
               </AdminTd>
             ) : null}
             <AdminTd className="font-medium">{t(`activities.type.${row.activity_type}`)}</AdminTd>

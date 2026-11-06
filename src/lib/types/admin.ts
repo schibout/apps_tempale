@@ -15,7 +15,13 @@ export type ActivityType =
   | "export"
   | "invite";
 
-export type ResourceType = "user" | "auth" | "file" | "support_ticket";
+export type ResourceType =
+  | "user"
+  | "auth"
+  | "file"
+  | "support_ticket"
+  | "system_settings"
+  | "announcement";
 
 export type ActivityStatus = "success" | "failure";
 
@@ -91,6 +97,7 @@ export interface AdminActivity {
   id: string;
   user_id: string | null;
   actor_ref: string | null;
+  user_deleted_at: string | null;
   user: ActivityActor | null;
   activity_type: ActivityType;
   resource_type: ResourceType;

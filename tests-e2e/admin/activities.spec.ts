@@ -10,6 +10,7 @@ const baseActivity: AdminActivity = {
   id: "a-1",
   user_id: "admin-1",
   actor_ref: null,
+  user_deleted_at: null,
   user: null,
   activity_type: "login",
   resource_type: "auth",

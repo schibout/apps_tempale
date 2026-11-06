@@ -45,6 +45,8 @@ const RESOURCE_TYPES = [
   "auth",
   "file",
   "support_ticket",
+  "system_settings",
+  "announcement",
 ] as const satisfies readonly ResourceType[];
 const STATUS_OPTIONS = ["success", "failure"] as const satisfies readonly ActivityStatus[];
 // Curated set of HTTP codes the audit log actually emits (200 success default

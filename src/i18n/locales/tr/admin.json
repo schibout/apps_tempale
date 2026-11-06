@@ -363,9 +363,12 @@
       "user": "Kullanıcı",
       "auth": "Kimlik",
       "file": "Dosya",
-      "support_ticket": "Destek talebi"
+      "support_ticket": "Destek talebi",
+      "system_settings": "Sistem ayarları",
+      "announcement": "Duyuru"
     },
     "deletedAccount": "Silinmiş hesap",
+    "unknownAccount": "Bilinmeyen hesap",
     "empty": "Seçili filtrelerle eşleşen aktivite yok.",
     "loading": "Aktiviteler yükleniyor..."
   }
