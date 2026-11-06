@@ -358,6 +358,7 @@
       "file": "Dosya",
       "support_ticket": "Destek talebi"
     },
+    "deletedAccount": "Silinmiş hesap",
     "empty": "Seçili filtrelerle eşleşen aktivite yok.",
     "loading": "Aktiviteler yükleniyor..."
   }

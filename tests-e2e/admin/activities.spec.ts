@@ -9,6 +9,7 @@ import type { Page } from "@playwright/test";
 const baseActivity: AdminActivity = {
   id: "a-1",
   user_id: "admin-1",
+  actor_ref: null,
   user: null,
   activity_type: "login",
   resource_type: "auth",

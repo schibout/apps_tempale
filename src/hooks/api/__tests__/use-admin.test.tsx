@@ -35,6 +35,7 @@ const mockAdmin: AdminUser = {
 };
 
 const mockActivity: AdminActivity = {
+  actor_ref: null,
   id: "a-1",
   user_id: "admin-1",
   user: null,

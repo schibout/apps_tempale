@@ -89,7 +89,8 @@ export interface ActivityActor {
 
 export interface AdminActivity {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  actor_ref: string | null;
   user: ActivityActor | null;
   activity_type: ActivityType;
   resource_type: ResourceType;

@@ -7,6 +7,7 @@ import type { AdminActivity } from "@/lib/types/admin";
 const makeRow = (overrides: Partial<AdminActivity> = {}): AdminActivity => ({
   id: "a-1",
   user_id: "user-123",
+  actor_ref: null,
   user: null,
   activity_type: "login",
   resource_type: "auth",
@@ -60,9 +61,13 @@ describe("ActivityTable", () => {
     expect(screen.queryByText(/admin:activities\.columns\.user/)).not.toBeInTheDocument();
   });
 
-  it("falls back to the first 8 chars of user_id when no actor is embedded", () => {
-    render(<ActivityTable rows={[makeRow({ user_id: "abcdef0123456789", user: null })]} />);
-    expect(screen.getByText("abcdef01")).toBeInTheDocument();
+  it("labels a deleted account with the first 8 chars of actor_ref", () => {
+    render(
+      <ActivityTable
+        rows={[makeRow({ user_id: null, actor_ref: "abcdef0123456789", user: null })]}
+      />,
+    );
+    expect(screen.getByText(/activities\.deletedAccount abcdef01$/)).toBeInTheDocument();
   });
 
   it("shows the actor's name when the activity embeds a user", () => {

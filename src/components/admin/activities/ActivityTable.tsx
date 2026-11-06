@@ -30,11 +30,14 @@ const statusCodeTone = (code: number): "success" | "warning" | "danger" | "muted
   return "muted";
 };
 
-// Prefer the actor's name, then email; fall back to a short id when the user
-// row is missing (e.g. a since-deleted account).
-const actorLabel = (row: AdminActivity): string => {
+// Prefer the actor's name, then email. Rows whose account was deleted keep an
+// anonymized actor_ref: show a "deleted account" label with its first 8 chars.
+const actorLabel = (row: AdminActivity, deletedLabel: string): string => {
   const actor = row.user;
-  if (!actor) return row.user_id.slice(0, 8);
+  if (!actor) {
+    const short = (row.actor_ref ?? row.user_id ?? "").slice(0, 8);
+    return short ? `${deletedLabel} ${short}` : deletedLabel;
+  }
   return [actor.first_name, actor.last_name].filter(Boolean).join(" ") || actor.email;
 };
 
@@ -125,7 +128,9 @@ export function ActivityTable({
               {formatDateTime(row.created_at)}
             </AdminTd>
             {showUser ? (
-              <AdminTd className="text-xs text-muted-foreground">{actorLabel(row)}</AdminTd>
+              <AdminTd className="text-xs text-muted-foreground">
+                {actorLabel(row, t("activities.deletedAccount"))}
+              </AdminTd>
             ) : null}
             <AdminTd className="font-medium">{t(`activities.type.${row.activity_type}`)}</AdminTd>
             <AdminTd className="text-muted-foreground">

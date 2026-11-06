@@ -358,6 +358,7 @@
       "file": "File",
       "support_ticket": "Support ticket"
     },
+    "deletedAccount": "Deleted account",
     "empty": "No activity matches the current filters.",
     "loading": "Loading activity..."
   }
