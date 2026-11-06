@@ -81,7 +81,7 @@ export function DashboardContent() {
           />
           <StatCard
             label={t("dashboard.stats.activitiesToday")}
-            value={stats?.activities_total ?? 0}
+            value={stats?.activities_today ?? 0}
             icon={Activity}
             loading={isLoading}
           />

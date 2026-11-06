@@ -43,6 +43,7 @@ export interface AdminStats {
   users_verified: number;
   users_admins: number;
   activities_total: number;
+  activities_today: number;
 }
 
 export interface AdminUserListResponse {
