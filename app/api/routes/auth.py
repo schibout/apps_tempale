@@ -9,6 +9,12 @@ from app.core.config import settings
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
 from app.core.rate_limit import rate_limit_public, rate_limit_strict
+from app.schemas.mfa import (
+    MfaChallengeResponse,
+    MfaCodeRequest,
+    MfaEnrollConfirmResponse,
+    MfaEnrollStartResponse,
+)
 from app.schemas.msg import Message
 from app.schemas.token import (
     CookieLoginResponse,
@@ -23,6 +29,7 @@ from app.schemas.user import (
 )
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.services.auth_service import (
+    MfaChallenge,
     change_password_service,
     login_service,
     logout_service,
@@ -33,6 +40,12 @@ from app.services.auth_service import (
     reset_password_service,
     verify_email_service,
 )
+from app.services.mfa_service import (
+    confirm_mfa_enrollment_service,
+    recover_mfa_service,
+    start_mfa_enrollment_service,
+    verify_mfa_service,
+)
 
 router = APIRouter()
 
@@ -42,6 +55,8 @@ router = APIRouter()
 # both set_cookie and delete_cookie calls or the cookie cannot be cleared.
 _REFRESH_COOKIE_PATH = f"{settings.API_V1_STR}/auth"
 _COOKIE_SECURE = settings.ENVIRONMENT != "local"
+# The challenge cookie only ever needs to reach the MFA endpoints.
+_MFA_COOKIE_PATH = f"{settings.API_V1_STR}/auth/mfa"
 
 
 def _set_access_cookie(response: Response, token: str) -> None:
@@ -70,6 +85,26 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
     )
 
 
+def _set_mfa_cookie(response: Response, token: str) -> None:
+    """Write the MFA challenge token as an HttpOnly, path-scoped cookie."""
+    response.set_cookie(
+        key="mfa_token",
+        value=token,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="strict",
+        max_age=settings.MFA_CHALLENGE_MINUTES * 60,
+        path=_MFA_COOKIE_PATH,
+    )
+
+
+def _open_mfa_session(response: Response, access_token: str, refresh: str) -> None:
+    """Swap the spent challenge cookie for the session cookies."""
+    response.delete_cookie(key="mfa_token", path=_MFA_COOKIE_PATH)
+    _set_access_cookie(response, access_token)
+    _set_refresh_cookie(response, refresh)
+
+
 def _clear_auth_cookies(response: Response) -> None:
     """Remove both auth cookies using the same paths they were set with."""
     response.delete_cookie(key="access_token", path="/")
@@ -77,7 +112,9 @@ def _clear_auth_cookies(response: Response) -> None:
 
 
 @router.post(
-    "/login", response_model=CookieLoginResponse, status_code=status.HTTP_200_OK
+    "/login",
+    response_model=CookieLoginResponse | MfaChallengeResponse,
+    status_code=status.HTTP_200_OK,
 )
 @rate_limit_strict("5/minute")
 @audit_unexpected_failure(
@@ -90,17 +127,123 @@ async def login_access_token(
     request: Request,
     session: SessionDep,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-) -> CookieLoginResponse:
-    """OAuth2 compatible token login, get an access token for future requests."""
+) -> CookieLoginResponse | MfaChallengeResponse:
+    """OAuth2 compatible token login, get an access token for future requests.
+
+    An account that must prove a second factor receives only the challenge cookie.
+    """
     result = await login_service(
         request=request,
         session=session,
         email=form_data.username,
         password=form_data.password,
     )
+    if isinstance(result, MfaChallenge):
+        _set_mfa_cookie(response, result.mfa_token)
+        return MfaChallengeResponse(
+            enrollment_required=result.enrollment_required,
+            message=SuccessMessages.MFA_CHALLENGE_REQUIRED,
+        )
     _set_access_cookie(response, result.access_token)
     _set_refresh_cookie(response, result.refresh_token)
     return CookieLoginResponse(user=result.user, message=result.message)
+
+
+@router.post(
+    "/mfa/verify", response_model=CookieLoginResponse, status_code=status.HTTP_200_OK
+)
+@rate_limit_strict("5/minute")
+@audit_unexpected_failure(
+    activity_type=ActivityType.LOGIN,
+    resource_type=ResourceType.AUTH,
+    endpoint="/mfa/verify",
+)
+async def mfa_verify(
+    request: Request, response: Response, session: SessionDep, body: MfaCodeRequest
+) -> CookieLoginResponse:
+    """Finish a challenged login with a TOTP code."""
+    result = await verify_mfa_service(
+        request=request,
+        session=session,
+        mfa_token=request.cookies.get("mfa_token"),
+        code=body.code,
+    )
+    _open_mfa_session(response, result.access_token, result.refresh_token)
+    return CookieLoginResponse(user=result.user, message=result.message)
+
+
+@router.post(
+    "/mfa/recovery", response_model=CookieLoginResponse, status_code=status.HTTP_200_OK
+)
+@rate_limit_strict("5/minute")
+@audit_unexpected_failure(
+    activity_type=ActivityType.LOGIN,
+    resource_type=ResourceType.AUTH,
+    endpoint="/mfa/recovery",
+)
+async def mfa_recovery(
+    request: Request, response: Response, session: SessionDep, body: MfaCodeRequest
+) -> CookieLoginResponse:
+    """Finish a challenged login with a single-use recovery code."""
+    result = await recover_mfa_service(
+        request=request,
+        session=session,
+        mfa_token=request.cookies.get("mfa_token"),
+        code=body.code,
+    )
+    _open_mfa_session(response, result.access_token, result.refresh_token)
+    return CookieLoginResponse(user=result.user, message=result.message)
+
+
+@router.post(
+    "/mfa/enroll/start",
+    response_model=MfaEnrollStartResponse,
+    status_code=status.HTTP_200_OK,
+)
+@rate_limit_strict("5/minute")
+@audit_unexpected_failure(
+    activity_type=ActivityType.LOGIN,
+    resource_type=ResourceType.AUTH,
+    endpoint="/mfa/enroll/start",
+)
+async def mfa_enroll_start(
+    request: Request, session: SessionDep
+) -> MfaEnrollStartResponse:
+    """Create a pending TOTP secret for an account not yet enrolled."""
+    return await start_mfa_enrollment_service(
+        request=request,
+        session=session,
+        mfa_token=request.cookies.get("mfa_token"),
+    )
+
+
+@router.post(
+    "/mfa/enroll/confirm",
+    response_model=MfaEnrollConfirmResponse,
+    status_code=status.HTTP_200_OK,
+)
+@rate_limit_strict("5/minute")
+@audit_unexpected_failure(
+    activity_type=ActivityType.LOGIN,
+    resource_type=ResourceType.AUTH,
+    endpoint="/mfa/enroll/confirm",
+)
+async def mfa_enroll_confirm(
+    request: Request, response: Response, session: SessionDep, body: MfaCodeRequest
+) -> MfaEnrollConfirmResponse:
+    """Activate a pending enrollment, open a session and return recovery codes."""
+    result = await confirm_mfa_enrollment_service(
+        request=request,
+        session=session,
+        mfa_token=request.cookies.get("mfa_token"),
+        code=body.code,
+    )
+    _open_mfa_session(response, result.tokens.access_token, result.tokens.refresh_token)
+    return MfaEnrollConfirmResponse(
+        user=result.tokens.user,
+        recovery_codes=result.recovery_codes,
+        message=SuccessMessages.MFA_ENROLLED,
+    )
 
 
 @router.post(

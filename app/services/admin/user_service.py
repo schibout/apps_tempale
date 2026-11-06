@@ -35,6 +35,7 @@ from app.schemas.msg import Message
 from app.schemas.user import Language, SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
+from app.use_cases.mfa_reset import reset_user_mfa
 from app.utils.email_templates import generate_password_reset_notification_email
 
 logger = logging.getLogger(__name__)
@@ -321,6 +322,35 @@ async def unlock_user_admin_service(
     )
 
     return Message(success=True, message=SuccessMessages.ADMIN_USER_UNLOCKED)
+
+
+async def reset_user_mfa_admin_service(
+    request: Request,
+    session: AsyncSession,
+    current_user: User,
+    user_id: uuid.UUID,
+) -> Message:
+    """Remove a user's MFA enrollment and revoke all their sessions.
+
+    The target enrolls again at their next login. The audit row identifies them
+    by ``resource_id`` only, never by email.
+    """
+    target = await _load_target(session, user_id)
+    _guard_superadmin_target(current_user, target)
+
+    revoked = await reset_user_mfa(session, target.id)
+
+    await log_activity(
+        session=session,
+        user_id=current_user.id,
+        activity_type=ActivityType.UPDATE,
+        resource_type=ResourceType.USER,
+        resource_id=target.id,
+        details={"action": "admin_reset_user_mfa", "revoked_sessions": revoked},
+        request=request,
+    )
+
+    return Message(success=True, message=SuccessMessages.ADMIN_USER_MFA_RESET)
 
 
 async def delete_user_admin_service(

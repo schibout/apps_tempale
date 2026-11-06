@@ -18,6 +18,7 @@ class Permission(StrEnum):
     USERS_PASSWORD_RESET = "users:password_reset"
     USERS_SESSIONS = "users:sessions"
     USERS_UNLOCK = "users:unlock"
+    USERS_MFA_RESET = "users:mfa_reset"
     FILES_READ = "files:read"
     FILES_DELETE = "files:delete"
     SUPPORT_READ = "support:read"

@@ -7,6 +7,8 @@ class SuccessMessages:
 
     # Auth Specific
     LOGIN_SUCCESS = "success.auth.login"
+    MFA_CHALLENGE_REQUIRED = "success.auth.mfa_challenge_required"
+    MFA_ENROLLED = "success.auth.mfa_enrolled"
     PASSWORD_RESET_SENT = "success.auth.password_reset_sent"
     PASSWORD_RESET_SUCCESS = "success.auth.password_reset_success"
     PASSWORD_CHANGE_SUCCESS = "success.auth.password_change_success"
@@ -27,6 +29,7 @@ class SuccessMessages:
     ADMIN_USER_SUSPENDED = "success.admin.user_suspended"
     ADMIN_USER_UNSUSPENDED = "success.admin.user_unsuspended"
     ADMIN_USER_UNLOCKED = "success.admin.user_unlocked"
+    ADMIN_USER_MFA_RESET = "success.admin.user_mfa_reset"
     ADMIN_USER_DELETED = "success.admin.user_deleted"
     ADMIN_PASSWORD_CHANGED = "success.admin.password_changed"
 

@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, Request, status
@@ -8,12 +9,14 @@ from app.core.config import settings
 from app.core.email import send_email
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
+from app.core.mfa import admin_mfa_required
 from app.core.realtime import account_topic, publish_safe
 from app.core.security import (
     actor_reference,
     aget_password_hash,
     averify_password,
     create_access_token,
+    create_mfa_token,
     create_password_reset_token,
     create_refresh_token,
     decode_token_payload,
@@ -23,7 +26,6 @@ from app.core.security import (
     verify_password_reset_token,
 )
 from app.models.user import User
-from app.models.user_session import UserSession
 from app.repositories.login_attempts import (
     clear_login_attempts,
     is_login_locked,
@@ -34,8 +36,8 @@ from app.repositories.token_blacklist import (
     is_token_blacklisted,
 )
 from app.repositories.user import get_user_by_email, get_user_by_id, update_user
+from app.repositories.user_mfa import get_mfa
 from app.repositories.user_session import (
-    create_session,
     flag_sessions_revoked,
     get_session_by_id,
     revoke_all_sessions,
@@ -55,13 +57,25 @@ from app.schemas.user import (
 )
 from app.schemas.user_activity import ActivityStatus, ActivityType, ResourceType
 from app.services.user_service import create_user_service
+from app.use_cases.auth_session import (
+    notify_account_locked,
+    open_session,
+    refresh_claims,
+)
 from app.use_cases.log_activity import log_activity
 from app.use_cases.settings import get_bool
 from app.utils.email_templates import (
-    generate_account_locked_email,
     generate_email_verification_email,
     generate_password_reset_email,
 )
+
+
+@dataclass
+class MfaChallenge:
+    """Outcome of a password login that still needs a second factor."""
+
+    mfa_token: str
+    enrollment_required: bool
 
 
 async def register_service(
@@ -133,24 +147,6 @@ async def register_service(
 _DUMMY_PASSWORD_HASH = get_password_hash("unused-timing-safe-placeholder")
 
 
-async def _notify_account_locked(user: User) -> None:
-    """Email the user that their account was just locked (best-effort)."""
-    lock_minutes = max(1, settings.LOGIN_LOCKOUT_SECONDS // 60)
-    email_data = generate_account_locked_email(
-        project_name=settings.PROJECT_NAME,
-        lock_minutes=lock_minutes,
-        lang=settings.DEFAULT_LANGUAGE,
-    )
-    await send_email(
-        to=user.email,
-        subject=email_data["subject"],
-        body=email_data["html"],
-        plain_text=email_data["plain_text"],
-        user_id=str(user.id),
-        is_html=True,
-    )
-
-
 async def authenticate(
     request: Request | None, session: AsyncSession, email: str, password: str
 ) -> User:
@@ -208,7 +204,7 @@ async def authenticate(
         locked_now = await register_failed_login(email)
         if locked_now:
             if user:
-                await _notify_account_locked(user)
+                await notify_account_locked(user)
                 if request:
                     await log_activity(
                         session=session,
@@ -232,8 +228,11 @@ async def authenticate(
         )
 
     # Correct password: reset the failed-attempt counter so a legitimate login
-    # never accumulates toward a lockout.
-    await clear_login_attempts(email)
+    # never accumulates toward a lockout. An account facing an MFA challenge keeps
+    # it until the challenge is passed: a password holder could otherwise log in
+    # again between wrong codes and never reach the lockout.
+    if not admin_mfa_required(user.role):
+        await clear_login_attempts(email)
 
     # Admin-suspended accounts are permanently locked out. This guard must run
     # before the grace-window fall-through below, otherwise a suspended user
@@ -268,54 +267,34 @@ async def authenticate(
     return user
 
 
-def _refresh_claims(refresh_token: str) -> dict:
-    """Decode a just-minted refresh token's claims (jti + exp for the session row)."""
-    claims = decode_token_payload(refresh_token, expected_type="refresh")
-    if claims is None:  # pragma: no cover - we minted the token one line above
-        raise RuntimeError("freshly minted refresh token failed to decode")
-    return claims
-
-
-async def _open_session(
-    request: Request | None,
-    session: AsyncSession,
-    user: User,
-    session_id: uuid.UUID,
-    refresh_token: str,
-) -> None:
-    """Persist the UserSession row backing a freshly issued token pair.
-
-    Device metadata is truncated to the column sizes so a hostile header can
-    never fail the insert.
-    """
-    claims = _refresh_claims(refresh_token)
-    user_agent = request.headers.get("user-agent") if request else None
-    ip_address = request.client.host if request and request.client else None
-    await create_session(
-        session,
-        UserSession(
-            id=session_id,
-            user_id=user.id,
-            refresh_jti=claims["jti"],
-            user_agent=user_agent[:512] if user_agent else None,
-            ip_address=ip_address[:45] if ip_address else None,
-            expires_at=datetime.fromtimestamp(claims["exp"], tz=UTC),
-        ),
-    )
-
-
 async def login_service(
     request: Request, session: AsyncSession, email: str, password: str
-) -> AuthTokens:
+) -> AuthTokens | MfaChallenge:
     """
     Orchestrate the login process: authenticate user and generate JWT tokens.
 
     Every successful login opens a ``UserSession`` row whose id rides in both
-    tokens as the ``sid`` claim, enabling per-device session management.
+    tokens as the ``sid`` claim, enabling per-device session management. An
+    account that must prove a second factor gets a challenge and no session.
     """
     user = await authenticate(
         request=request, session=session, email=email, password=password
     )
+
+    if admin_mfa_required(user.role):
+        mfa = await get_mfa(session, user.id)
+        await log_activity(
+            session=session,
+            user_id=user.id,
+            activity_type=ActivityType.LOGIN,
+            resource_type=ResourceType.AUTH,
+            details={"action": "mfa_challenge_issued"},
+            request=request,
+        )
+        return MfaChallenge(
+            mfa_token=create_mfa_token(user.id),
+            enrollment_required=mfa is None or mfa.enabled_at is None,
+        )
 
     await log_activity(
         session=session,
@@ -329,7 +308,7 @@ async def login_service(
     session_id = uuid.uuid4()
     access_token = create_access_token(user.id, session_id=session_id)
     refresh_token = create_refresh_token(user.id, session_id=session_id)
-    await _open_session(request, session, user, session_id, refresh_token)
+    await open_session(request, session, user, session_id, refresh_token)
 
     return AuthTokens(
         access_token=access_token,
@@ -467,9 +446,10 @@ async def refresh_token_service(
     # to the same session, then record the new jti/expiry on the row.
     await _revoke_token(refresh_token)
 
-    new_access_token = create_access_token(user_id, session_id=session_id)
-    new_refresh_token = create_refresh_token(user_id, session_id=session_id)
-    new_claims = _refresh_claims(new_refresh_token)
+    mfa = claims.get("mfa", False)
+    new_access_token = create_access_token(user_id, session_id=session_id, mfa=mfa)
+    new_refresh_token = create_refresh_token(user_id, session_id=session_id, mfa=mfa)
+    new_claims = refresh_claims(new_refresh_token)
     await rotate_session_jti(
         session,
         session_id=session_id,

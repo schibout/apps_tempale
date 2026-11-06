@@ -15,30 +15,61 @@ async def get_mfa(session: AsyncSession, user_id: uuid.UUID) -> UserMfa | None:
 
 async def upsert_pending_mfa(
     session: AsyncSession, user_id: uuid.UUID, secret_encrypted: str
-) -> UserMfa:
-    """Create or reset an enrollment with a new secret, not yet enabled."""
-    mfa = await session.get(UserMfa, user_id)
-    if mfa is None:
-        mfa = UserMfa(user_id=user_id, secret_encrypted=secret_encrypted)
-        session.add(mfa)
-    else:
-        mfa.secret_encrypted = secret_encrypted
-        mfa.enabled_at = None
-        mfa.last_used_step = None
+) -> UserMfa | None:
+    """Create or re-key a pending enrollment; None if one is already enabled.
+
+    The update is conditional on ``enabled_at`` so an enabled enrollment cannot
+    be reset, even by a request racing with the confirmation.
+    """
+    result = await session.execute(
+        update(UserMfa)
+        .where(UserMfa.user_id == user_id, UserMfa.enabled_at.is_(None))
+        .values(secret_encrypted=secret_encrypted, last_used_step=None)
+    )
+    if result.rowcount == 0:  # type: ignore[attr-defined]
+        if await session.get(UserMfa, user_id) is not None:
+            await session.commit()
+            return None
+        session.add(UserMfa(user_id=user_id, secret_encrypted=secret_encrypted))
     await session.commit()
-    await session.refresh(mfa)
-    return mfa
+    return await session.get(UserMfa, user_id, populate_existing=True)
 
 
-async def mark_enabled(
-    session: AsyncSession, mfa: UserMfa, *, enabled_at: datetime, step: int
-) -> UserMfa:
-    """Activate an enrollment and record the confirming TOTP step."""
-    mfa.enabled_at = enabled_at
-    mfa.last_used_step = step
+async def enable_mfa(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    secret_encrypted: str,
+    code_hashes: Iterable[str],
+    enabled_at: datetime,
+    step: int,
+) -> bool:
+    """Activate a pending enrollment and store its recovery codes atomically.
+
+    Both writes share one transaction, so MFA is never enabled without codes.
+    Returns False, writing nothing, if the enrollment is no longer pending or
+    no longer holds ``secret_encrypted``, the secret the caller just verified.
+    """
+    result = await session.execute(
+        update(UserMfa)
+        .where(
+            UserMfa.user_id == user_id,
+            UserMfa.enabled_at.is_(None),
+            UserMfa.secret_encrypted == secret_encrypted,
+        )
+        .values(enabled_at=enabled_at, last_used_step=step)
+    )
+    if result.rowcount != 1:  # type: ignore[attr-defined]
+        await session.commit()
+        return False
+    await session.execute(
+        delete(UserMfaRecoveryCode).where(UserMfaRecoveryCode.user_id == user_id)
+    )
+    session.add_all(
+        UserMfaRecoveryCode(user_id=user_id, code_hash=h) for h in code_hashes
+    )
     await session.commit()
-    await session.refresh(mfa)
-    return mfa
+    return True
 
 
 async def update_last_used_step(

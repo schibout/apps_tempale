@@ -22,11 +22,13 @@ def _base_payload(
     token_type: str,
     expire: datetime,
     session_id: str | uuid.UUID | None = None,
+    mfa: bool = False,
 ) -> dict:
     """Build a standard JWT payload with UTC unix timestamps.
 
     ``session_id`` becomes the ``sid`` claim binding the token to a
     ``UserSession`` row, so revoking the session invalidates the token.
+    ``mfa`` adds the ``mfa`` claim, present only once a second factor was proven.
     """
     now = utc_now()
     payload = {
@@ -38,6 +40,8 @@ def _base_payload(
     }
     if session_id is not None:
         payload["sid"] = str(session_id)
+    if mfa:
+        payload["mfa"] = True
     return payload
 
 
@@ -51,6 +55,7 @@ def create_access_token(
     expires_delta: timedelta | None = None,
     *,
     session_id: str | uuid.UUID | None = None,
+    mfa: bool = False,
 ) -> str:
     """
     Create a short-lived JWT access token.
@@ -59,6 +64,7 @@ def create_access_token(
         subject:       User ID (str or UUID)
         expires_delta: Optional custom TTL
         session_id:    UserSession id embedded as the ``sid`` claim
+        mfa:           Whether the session proved a second factor
 
     Returns:
         Encoded JWT string
@@ -66,7 +72,9 @@ def create_access_token(
     expire = utc_now() + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload = _base_payload(str(subject), "access", expire, session_id=session_id)
+    payload = _base_payload(
+        str(subject), "access", expire, session_id=session_id, mfa=mfa
+    )
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
 
@@ -75,6 +83,7 @@ def create_refresh_token(
     expires_delta: timedelta | None = None,
     *,
     session_id: str | uuid.UUID | None = None,
+    mfa: bool = False,
 ) -> str:
     """
     Create a long-lived JWT refresh token.
@@ -85,6 +94,7 @@ def create_refresh_token(
         subject:       User ID (str or UUID)
         expires_delta: Optional custom TTL
         session_id:    UserSession id embedded as the ``sid`` claim
+        mfa:           Whether the session proved a second factor
 
     Returns:
         Encoded JWT string
@@ -92,7 +102,26 @@ def create_refresh_token(
     expire = utc_now() + (
         expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     )
-    payload = _base_payload(str(subject), "refresh", expire, session_id=session_id)
+    payload = _base_payload(
+        str(subject), "refresh", expire, session_id=session_id, mfa=mfa
+    )
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+
+def create_mfa_token(user_id: str | uuid.UUID) -> str:
+    """
+    Create the short-lived token proving the password step of an MFA login.
+
+    Its ``mfa`` type keeps it from being accepted as an access or refresh token.
+
+    Args:
+        user_id: User ID (str or UUID)
+
+    Returns:
+        Encoded JWT string
+    """
+    expire = utc_now() + timedelta(minutes=settings.MFA_CHALLENGE_MINUTES)
+    payload = _base_payload(str(user_id), "mfa", expire)
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
 
@@ -105,7 +134,7 @@ def decode_token_payload(token: str, expected_type: str = "access") -> dict | No
 
     Args:
         token:         Raw JWT string
-        expected_type: ``"access"`` or ``"refresh"``
+        expected_type: ``"access"``, ``"refresh"`` or ``"mfa"``
 
     Returns:
         Claims dict on success, ``None`` otherwise

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, WebSocket, status
 from app.api.decorators import audit_unexpected_failure
 from app.api.deps import (
     SessionDep,
-    get_ws_user,
+    get_ws_admin_user,
     require_permission,
     require_permissions,
     user_has_permission,
@@ -162,11 +162,11 @@ async def admin_feed_ws(websocket: WebSocket, session: SessionDep) -> None:
     """One multiplexed socket per admin: the global queue plus any ticket thread.
 
     Authenticates the cookie as an admin holding ``support:read`` (superadmins
-    bypass the grant), auto-subscribes to the ``admin`` feed, then accepts
+    bypass the grant) whose session carries the ``mfa`` claim, auto-subscribes to the ``admin`` feed, then accepts
     ``subscribe``/``unsubscribe`` frames for any existing ticket. Replaces the
     old per-ticket admin socket.
     """
-    user = await get_ws_user(websocket, session)
+    user = await get_ws_admin_user(websocket, session)
     if user is None or not await user_has_permission(
         session, user, Permission.SUPPORT_READ
     ):

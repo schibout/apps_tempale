@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.db import AsyncSessionLocal
 from app.core.messages.error_message import ErrorMessages
+from app.core.mfa import admin_mfa_required
 from app.core.security import decode_token_payload
 from app.models.user import User
 from app.repositories.admin.permission import has_permission
@@ -79,6 +80,7 @@ async def get_current_user(
             )
 
         token_data = TokenPayload(sub=claims["sub"], sid=sid, jti=claims.get("jti"))
+        request.state.token_claims = claims
     except (ValidationError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -106,38 +108,61 @@ def get_current_active_user(
     return current_user
 
 
+def _has_required_mfa(user: User, claims: dict | None) -> bool:
+    """Return whether the token's claims satisfy the MFA rule for the user's role."""
+    return not admin_mfa_required(user.role) or bool(
+        claims and claims.get("mfa") is True
+    )
+
+
+def _ensure_admin_mfa(request: Request, user: User) -> None:
+    """Raise 403 if an admin's session has not proven a second factor."""
+    claims = getattr(request.state, "token_claims", None)
+    if not _has_required_mfa(user, claims):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.MFA_REQUIRED,
+        )
+
+
 def get_current_admin_user(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> User:
-    """Require an active admin or superadmin — the admin-panel access gate."""
+    """Require an active admin or superadmin — the admin-panel access gate.
+
+    The session must also carry the ``mfa`` claim when MFA is enforced.
+    """
     if current_user.role not in (SystemRole.ADMIN, SystemRole.SUPERADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ErrorMessages.INSUFFICIENT_PERMISSIONS,
         )
+    _ensure_admin_mfa(request, current_user)
     return current_user
 
 
 def get_current_superadmin(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> User:
-    """Require an active superadmin (admin management is superadmin-only)."""
+    """Require an active superadmin (admin management is superadmin-only).
+
+    The session must also carry the ``mfa`` claim when MFA is enforced.
+    """
     if current_user.role != SystemRole.SUPERADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ErrorMessages.ONLY_SUPERADMIN_ALLOWED,
         )
+    _ensure_admin_mfa(request, current_user)
     return current_user
 
 
-async def get_ws_user(websocket: WebSocket, db: AsyncSession) -> User | None:
-    """Authenticate a WebSocket from its ``access_token`` cookie.
-
-    Mirrors ``get_current_user`` but returns ``None`` instead of raising, so the
-    caller can close the socket with an application code. Cookie-only: a browser
-    sends the auth cookie on the WebSocket handshake automatically, while bearer
-    headers are awkward to set on ``WebSocket`` clients.
-    """
+async def _resolve_ws_identity(
+    websocket: WebSocket, db: AsyncSession
+) -> tuple[User, dict] | None:
+    """Return the active user and token claims of a socket's cookie, if valid."""
     token = websocket.cookies.get("access_token")
     if not token:
         return None
@@ -158,7 +183,32 @@ async def get_ws_user(websocket: WebSocket, db: AsyncSession) -> User | None:
     user = await get_user_by_id(db, user_id=uuid.UUID(token_data.sub))
     if user is None or not user.is_active:
         return None
-    return user
+    return user, claims
+
+
+async def get_ws_user(websocket: WebSocket, db: AsyncSession) -> User | None:
+    """Authenticate a WebSocket from its ``access_token`` cookie.
+
+    Mirrors ``get_current_user`` but returns ``None`` instead of raising, so the
+    caller can close the socket with an application code. Cookie-only: a browser
+    sends the auth cookie on the WebSocket handshake automatically, while bearer
+    headers are awkward to set on ``WebSocket`` clients.
+    """
+    identity = await _resolve_ws_identity(websocket, db)
+    return identity[0] if identity else None
+
+
+async def get_ws_admin_user(websocket: WebSocket, db: AsyncSession) -> User | None:
+    """Authenticate an admin-only WebSocket, enforcing the ``mfa`` claim.
+
+    Same contract as ``get_ws_user``. The role and permission checks stay with
+    the caller; this only refuses an admin whose session lacks the second factor.
+    """
+    identity = await _resolve_ws_identity(websocket, db)
+    if identity is None:
+        return None
+    user, claims = identity
+    return user if _has_required_mfa(user, claims) else None
 
 
 async def get_current_session_id(
@@ -226,8 +276,10 @@ async def resolve_optional_user(request: Request, db: AsyncSession) -> User | No
     user = await get_user_by_id(db, user_id=uuid.UUID(token_data.sub))
     # Mirror get_ws_user: a deactivated account (even with a still-valid token)
     # must not pass — otherwise a suspended/deactivated admin could slip through
-    # the maintenance gate.
-    return user if user and user.is_active else None
+    # the maintenance gate. The same goes for an admin without the second factor.
+    if not user or not user.is_active or not _has_required_mfa(user, claims):
+        return None
+    return user
 
 
 async def user_has_permission(

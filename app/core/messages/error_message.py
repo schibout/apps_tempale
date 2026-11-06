@@ -36,6 +36,13 @@ class ErrorMessages:
     # Account lockout (automatic, temporary — too many failed logins)
     ACCOUNT_LOCKED = "error.account.locked"
 
+    # Admin MFA
+    MFA_REQUIRED = "error.auth.mfa_required"
+    MFA_INVALID_CODE = "error.auth.mfa_invalid_code"
+    MFA_CHALLENGE_INVALID = "error.auth.mfa_challenge_invalid"
+    MFA_ALREADY_ENABLED = "error.auth.mfa_already_enabled"
+    MFA_RESET_ROOT_ONLY = "error.auth.mfa_reset_root_only"
+
     # Admin
     ADMIN_CANNOT_MODIFY_SELF = "error.admin.cannot_modify_self"
     ADMIN_CANNOT_DELETE_SELF = "error.admin.cannot_delete_self"

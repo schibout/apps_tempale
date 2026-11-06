@@ -9,6 +9,7 @@ import pyotp
 from cryptography.fernet import Fernet
 
 from app.core.config import settings
+from app.schemas.user import SystemRole
 
 TOTP_INTERVAL_SECONDS = 30
 TOTP_VALID_WINDOW = 1
@@ -16,6 +17,14 @@ RECOVERY_CODE_COUNT = 10
 RECOVERY_CODE_GROUP_LENGTH = 5
 # Unambiguous alphabet (no 0/O, 1/I/L) so codes are easy to copy by hand.
 RECOVERY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def admin_mfa_required(role: str) -> bool:
+    """Return whether an account with ``role`` must prove a second factor."""
+    return settings.ADMIN_MFA_REQUIRED and role in (
+        SystemRole.ADMIN,
+        SystemRole.SUPERADMIN,
+    )
 
 
 def _fernet() -> Fernet:

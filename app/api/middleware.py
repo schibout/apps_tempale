@@ -19,6 +19,7 @@ from app.use_cases.settings import get_bool
 _MAINTENANCE_EXEMPT: tuple[str, ...] = (
     f"{settings.API_V1_STR}/health",
     f"{settings.API_V1_STR}/auth/login",
+    f"{settings.API_V1_STR}/auth/mfa",
     f"{settings.API_V1_STR}/auth/refresh",
     f"{settings.API_V1_STR}/auth/logout",
     f"{settings.API_V1_STR}/settings/public",
@@ -28,7 +29,7 @@ _MAINTENANCE_EXEMPT: tuple[str, ...] = (
 def register_maintenance_middleware(app: FastAPI) -> None:
     """Return 503 for non-admins while maintenance mode is on.
 
-    Only API paths are gated. Auth (login/refresh/logout), health, and the
+    Only API paths are gated. Auth (login/MFA/refresh/logout), health, and the
     public settings endpoint stay open so admins can sign in and the frontend
     can render the maintenance screen; admins and superadmins pass through.
     CORS preflight (OPTIONS) is never gated. Runs as HTTP middleware rather than
