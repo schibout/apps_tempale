@@ -42,7 +42,7 @@ from app.schemas.admin import (
     RootTransferConfirm,
     RootTransferRequest,
 )
-from app.schemas.admin_permission import Permission
+from app.schemas.admin_permission import Permission, directly_grantable_permissions
 from app.schemas.msg import Message
 from app.schemas.notification import NotificationType
 from app.schemas.user import Language, SystemRole
@@ -102,7 +102,7 @@ async def _notify_permissions_changed(
 
 def get_permission_catalog_service() -> PermissionCatalogResponse:
     """Return every assignable RBAC permission key for the grant UI."""
-    return PermissionCatalogResponse(permissions=list(Permission))
+    return PermissionCatalogResponse(permissions=directly_grantable_permissions())
 
 
 async def list_admins_service(

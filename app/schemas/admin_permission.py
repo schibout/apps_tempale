@@ -30,3 +30,32 @@ class Permission(StrEnum):
     BROADCAST_WRITE = "broadcast:write"
     SYSTEM_SETTINGS_READ = "system_settings:read"
     SYSTEM_SETTINGS_WRITE = "system_settings:write"
+    ROLES_READ = "roles:read"
+    ROLES_WRITE = "roles:write"
+    PERMISSION_SETS_READ = "permission_sets:read"
+    PERMISSION_SETS_WRITE = "permission_sets:write"
+    ADMINS_READ = "admins:read"
+    ADMINS_WRITE = "admins:write"
+    ADMINS_DELETE = "admins:delete"
+    # Self-service keys (``self.<resource>:<action>``): usable by any account,
+    # granted only through roles, never through the direct admin grant grid.
+    SELF_PROFILE_UPDATE = "self.profile:update"
+    SELF_FILES_UPLOAD = "self.files:upload"
+    SELF_NOTIFICATIONS_READ = "self.notifications:read"
+    SELF_SUPPORT_READ = "self.support:read"
+    SELF_SUPPORT_CREATE = "self.support:create"
+    SELF_SUPPORT_REPLY = "self.support:reply"
+    SELF_SUPPORT_CLOSE = "self.support:close"
+
+
+SELF_PREFIX = "self."
+
+
+def is_self_permission(permission: Permission) -> bool:
+    """Return whether the permission is a self-service (``self.*``) key."""
+    return permission.value.startswith(SELF_PREFIX)
+
+
+def directly_grantable_permissions() -> list[Permission]:
+    """Return the permissions assignable through the direct admin grant grid."""
+    return [perm for perm in Permission if not is_self_permission(perm)]

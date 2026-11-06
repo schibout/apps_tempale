@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.schemas.admin_permission import Permission
+from app.schemas.admin_permission import Permission, is_self_permission
 from app.schemas.common import ActivityDetails
 from app.schemas.file import FileCategory, FilePublic
 from app.schemas.user import SystemRole
@@ -209,6 +209,13 @@ class AdminListResponse(BaseModel):
     limit: int
 
 
+def _reject_self_permissions(permissions: list[Permission]) -> list[Permission]:
+    """Reject ``self.*`` keys, which are reserved for roles."""
+    if any(is_self_permission(perm) for perm in permissions):
+        raise ValueError("self.* permissions can only be granted through roles")
+    return permissions
+
+
 class AdminCreate(BaseModel):
     """Create a brand-new admin account with an initial permission set."""
 
@@ -219,6 +226,8 @@ class AdminCreate(BaseModel):
     last_name: str | None = Field(default=None, max_length=100)
     password: str = Field(min_length=8, max_length=40)
     permissions: list[Permission] = Field(default_factory=list)
+
+    _no_self_permissions = field_validator("permissions")(_reject_self_permissions)
 
 
 class RootTransferRequest(BaseModel):
@@ -243,6 +252,8 @@ class AdminPermissionsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     permissions: list[Permission]
+
+    _no_self_permissions = field_validator("permissions")(_reject_self_permissions)
 
 
 class AdminMutationResponse(BaseModel):

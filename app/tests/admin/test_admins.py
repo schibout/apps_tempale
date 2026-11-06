@@ -21,10 +21,12 @@ from app.tests.conftest import TestingSessionLocal
 
 @pytest.mark.asyncio
 async def test_permission_catalog_lists_all_keys(superadmin_client: AsyncClient):
-    """The catalog exposes exactly the full permission enum."""
+    """The catalog exposes every directly grantable key (no ``self.*``)."""
     response = await superadmin_client.get("/admin/admins/permissions")
     assert response.status_code == 200
-    assert set(response.json()["permissions"]) == {p.value for p in Permission}
+    assert set(response.json()["permissions"]) == {
+        p.value for p in Permission if not p.value.startswith("self.")
+    }
 
 
 @pytest.mark.asyncio
