@@ -53,7 +53,7 @@
       "superadmin_role_immutable": "A superadmin's role cannot be changed."
     },
     "rbac": {
-      "privilege_escalation": "You cannot grant or withdraw a permission you do not hold."
+      "privilege_escalation": "You can only grant or withdraw permissions you hold permanently. Temporary permissions cannot be passed on."
     },
     "notification": {
       "not_found": "Notification not found.",

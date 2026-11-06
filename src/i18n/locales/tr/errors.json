@@ -53,7 +53,7 @@
       "superadmin_role_immutable": "Bir superadmin'in rolü değiştirilemez."
     },
     "rbac": {
-      "privilege_escalation": "Sahip olmadığınız bir yetkiyi veremez veya geri alamazsınız."
+      "privilege_escalation": "Yalnızca kalıcı olarak sahip olduğunuz yetkileri verebilir veya geri alabilirsiniz. Geçici yetkiler aktarılamaz."
     },
     "notification": {
       "not_found": "Bildirim bulunamadı.",

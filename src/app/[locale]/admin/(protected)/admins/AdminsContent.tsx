@@ -58,6 +58,8 @@ export function AdminsContent() {
 
   // A viewer only hands out or withdraws keys it holds, so the grids offer only
   // those. An edited admin's other keys stay in the modal's state and are resent.
+  // `/users/me` does not say which keys are temporary: the backend refuses those,
+  // and its error message explains why.
   const catalog = (catalogQuery.data?.permissions ?? []).filter(has);
   const data = adminsQuery.data;
   const isLoading = adminsQuery.isLoading || catalogQuery.isLoading;
