@@ -53,6 +53,17 @@ describe("ProfileAvatar", () => {
 
     expect(screen.getByRole("button", { name: /upload:replace/ })).toBeDisabled();
     expect(screen.getByText("profile:avatar.uploadRestricted")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload:remove/ })).toBeEnabled();
+  });
+
+  it("disables removal without self.profile:update", () => {
+    useAuthStore.setState({
+      user: { ...currentUser, permissions: [Permission.SelfFilesUpload] },
+    });
+
+    renderWithProviders(<ProfileAvatar />);
+
+    expect(screen.getByRole("button", { name: /upload:remove/ })).toBeDisabled();
   });
 
   it("keeps the picker enabled with both self.files:upload and self.profile:update", () => {

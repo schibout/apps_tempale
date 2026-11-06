@@ -30,6 +30,9 @@ interface AvatarUploadProps {
   allowedTypes?: readonly string[];
   maxSizeBytes?: number;
   disabled?: boolean;
+  // Disables only the Remove action (the picker follows `disabled`), for callers
+  // whose removal needs a different permission than picking a new file.
+  removeDisabled?: boolean;
   className?: string;
   // "circle" + "cover" is the avatar default. A logo (often transparent and
   // rectangular) should use "square" + "contain" so it is never cropped.
@@ -41,6 +44,7 @@ interface AvatarActionsProps {
   hasPending: boolean;
   hasValue: boolean;
   interactive: boolean;
+  canRemove: boolean;
   saving: boolean;
   onSave: () => void;
   onDiscard: () => void;
@@ -55,6 +59,7 @@ function AvatarActions({
   hasPending,
   hasValue,
   interactive,
+  canRemove,
   saving,
   onSave,
   onDiscard,
@@ -92,7 +97,7 @@ function AvatarActions({
         {hasValue ? t("replace") : t("upload")}
       </Button>
       {hasValue && (
-        <Button variant="destructive" onClick={onRemove} disabled={!interactive}>
+        <Button variant="destructive" onClick={onRemove} disabled={!canRemove}>
           <Trash2 className="size-4" />
           {t("remove")}
         </Button>
@@ -108,6 +113,7 @@ export function AvatarUpload({
   allowedTypes = DEFAULT_IMAGE_TYPES,
   maxSizeBytes = DEFAULT_MAX_UPLOAD_SIZE,
   disabled = false,
+  removeDisabled = false,
   className,
   shape = "circle",
   fit = "cover",
@@ -219,6 +225,7 @@ export function AvatarUpload({
           hasPending={Boolean(pendingFile)}
           hasValue={Boolean(value)}
           interactive={interactive}
+          canRemove={!removeDisabled && !upload.isPending}
           saving={upload.isPending}
           onSave={handleSave}
           onDiscard={clearPending}

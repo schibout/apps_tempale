@@ -10,6 +10,7 @@ import { NotificationPanel } from "@/components/notifications/NotificationPanel"
 import { Button } from "@/components/ui/button";
 import { useUnreadCount } from "@/hooks/api/use-notifications";
 import { useNotificationRealtime } from "@/hooks/use-notification-realtime";
+import { useCanReadOwnNotifications } from "@/hooks/use-permissions";
 import { useAuthStore } from "@/stores/auth.store";
 
 const NotificationBellInner = () => {
@@ -53,6 +54,7 @@ const NotificationBellInner = () => {
 // guests. The inner component only mounts once the user is authenticated.
 export const NotificationBell = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  if (!isAuthenticated) return null;
+  const canRead = useCanReadOwnNotifications();
+  if (!isAuthenticated || !canRead) return null;
   return <NotificationBellInner />;
 };

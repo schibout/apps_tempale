@@ -49,6 +49,7 @@ export const ProfileAvatar = () => {
           value={user?.avatar_file ?? null}
           onChange={handleChange}
           disabled={restrictedText !== null}
+          removeDisabled={!canUpdateProfile}
         />
       </div>
       {restrictedText ? <PermissionNote text={restrictedText} className="px-6 pb-6" /> : null}
