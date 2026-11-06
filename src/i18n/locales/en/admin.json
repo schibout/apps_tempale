@@ -27,7 +27,7 @@
     "columns": {
       "admin": "Admin",
       "role": "Role",
-      "permissions": "Permissions",
+      "permissions": "Direct permissions",
       "created": "Created",
       "actions": "Actions"
     },
@@ -85,7 +85,9 @@
       "codePlaceholder": "6-digit code",
       "confirm": "Confirm transfer",
       "cancel": "Cancel"
-    }
+    },
+    "directPermissionsHint": "Direct grants only. Permissions given through roles and permission sets are not counted: open the access panel to see them.",
+    "viewAccess": "View access"
   },
   "permissions": {
     "selectAll": "All",
@@ -100,7 +102,15 @@
       "stats": "Stats",
       "roles": "Roles",
       "permission_sets": "Permission sets",
-      "admins": "Admins"
+      "admins": "Admins",
+      "broadcast": "Announcements",
+      "system_settings": "System settings",
+      "self": {
+        "profile": "My profile",
+        "files": "My files",
+        "notifications": "My notifications",
+        "support": "My support tickets"
+      }
     },
     "action": {
       "read": "View",
@@ -111,7 +121,11 @@
       "sessions": "Manage sessions",
       "unlock": "Unlock accounts",
       "mfa_reset": "Reset MFA",
-      "update": "Assign"
+      "update": "Assign",
+      "upload": "Upload",
+      "create": "Create",
+      "reply": "Reply",
+      "close": "Close"
     }
   },
   "shell": {
@@ -123,7 +137,8 @@
       "overview": "Overview",
       "management": "Management",
       "monitoring": "Monitoring",
-      "account": "Account"
+      "account": "Account",
+      "accessControl": "Access control"
     },
     "nav": {
       "dashboard": "Dashboard",
@@ -135,7 +150,9 @@
       "notifications": "Notifications",
       "broadcasts": "Announcements",
       "system-settings": "System Settings",
-      "profile": "Profile"
+      "profile": "Profile",
+      "roles": "Roles",
+      "permission-sets": "Permission sets"
     },
     "signedInAs": "Signed in as",
     "exit": "Exit admin",
@@ -270,7 +287,8 @@
     "unsuspend": "Lift suspension",
     "unlock": "Unlock account",
     "delete": "Delete user",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "adminTargetRestricted": "Changing an admin account requires the admins:write permission, so this is hidden and no request is sent."
   },
   "confirm": {
     "deleteTitle": "Delete this user?",
@@ -376,5 +394,122 @@
     "unknownAccount": "Unknown account",
     "empty": "No activity matches the current filters.",
     "loading": "Loading activity..."
+  },
+  "rbac": {
+    "audience": {
+      "label": "Audience",
+      "user": "Users",
+      "admin": "Admins"
+    },
+    "audienceHint": {
+      "user": "For regular accounts: self-service permissions only.",
+      "admin": "For admin panel accounts: any permission."
+    },
+    "system": "System",
+    "systemReadOnly": "System elements cannot be changed or deleted.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
+    "create": "Create",
+    "close": "Close",
+    "edit": "Edit",
+    "view": "View",
+    "delete": "Delete",
+    "rowActions": "Row actions",
+    "fields": {
+      "key": "Key",
+      "keyHint": "Lowercase letters, digits and underscores; dots separate parts. Fixed once created.",
+      "name": "Name",
+      "description": "Description"
+    },
+    "validation": {
+      "keyInvalid": "Use lowercase letters, digits and underscores, starting with a letter.",
+      "nameRequired": "A name is required."
+    },
+    "roles": {
+      "title": "Roles",
+      "subtitle": "A role bundles permission sets and is assigned to accounts.",
+      "create": "Create role",
+      "createTitle": "Create a role",
+      "editTitle": "Edit role · {{name}}",
+      "viewTitle": "Role · {{name}}",
+      "loading": "Loading roles...",
+      "empty": "No roles yet.",
+      "columns": {
+        "role": "Role",
+        "audience": "Audience",
+        "sets": "Permission sets",
+        "actions": "Actions"
+      },
+      "setsLabel": "Permission sets",
+      "noSets": "None",
+      "noSetsAvailable": "No permission set exists for this audience yet.",
+      "delete": {
+        "title": "Delete role",
+        "description": "Delete the role {{name}}? This cannot be undone.",
+        "confirm": "Delete role"
+      }
+    },
+    "sets": {
+      "title": "Permission sets",
+      "subtitle": "A permission set is a named group of permissions that roles include.",
+      "create": "Create permission set",
+      "createTitle": "Create a permission set",
+      "editTitle": "Edit permission set · {{name}}",
+      "viewTitle": "Permission set · {{name}}",
+      "loading": "Loading permission sets...",
+      "empty": "No permission sets yet.",
+      "columns": {
+        "set": "Permission set",
+        "audience": "Audience",
+        "permissions": "Permissions",
+        "actions": "Actions"
+      },
+      "permissionsLabel": "Permissions",
+      "permissionCount": "{{count}} permissions",
+      "delete": {
+        "title": "Delete permission set",
+        "description": "Delete the permission set {{name}}? This cannot be undone.",
+        "confirm": "Delete permission set"
+      }
+    },
+    "access": {
+      "title": "Access",
+      "description": "The roles, permission sets and permissions this account holds, and where each one comes from.",
+      "loading": "Loading access...",
+      "roles": "Roles",
+      "permissionSets": "Permission sets",
+      "directPermissions": "Direct permissions",
+      "directHint": "Direct permissions are edited in Admin management.",
+      "openAdmins": "Open admin management",
+      "none": "None",
+      "expires": "Expires {{date}}",
+      "expired": "Expired",
+      "effective": "Effective permissions",
+      "effectiveEmpty": "This account holds no permission.",
+      "source": {
+        "role": "Role",
+        "permission_set": "Permission set",
+        "direct": "Direct grant",
+        "superadmin": "Superadmin tier"
+      },
+      "manageRoles": "Manage roles",
+      "manageSets": "Manage permission sets",
+      "superadminNote": "A superadmin holds every permission through its tier. Roles and permission sets cannot be assigned to it.",
+      "selfNote": "You cannot change your own access.",
+      "forbiddenNote": "Viewing the access of an admin account requires the admins:read permission.",
+      "assign": {
+        "rolesTitle": "Roles · {{email}}",
+        "setsTitle": "Permission sets · {{email}}",
+        "expiresLabel": "Expires at",
+        "expiresHint": "Leave empty for no expiry.",
+        "noOptions": "There is nothing to assign.",
+        "promoteWarning": "Assigning an admin role or permission set gives this account access to the admin panel.",
+        "demoteWarning": "With no admin role, permission set or direct permission left, this account loses access to the admin panel and becomes a regular user.",
+        "userRoleRequired": "Keep at least one permanent user role.",
+        "save": "Save assignments",
+        "expiredBadge": "Expired"
+      }
+    }
   }
 }

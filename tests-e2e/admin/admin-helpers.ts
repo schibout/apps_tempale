@@ -7,6 +7,9 @@ import type { Locale } from "./admin-strings";
 import type { Page } from "@playwright/test";
 
 const ALL_PERMISSIONS = Object.values(Permission) as Permission[];
+// Self-service keys are granted through roles only: the direct-grant catalog and
+// the admins list never carry them.
+const ADMIN_PERMISSIONS = ALL_PERMISSIONS.filter((p) => !p.startsWith("self."));
 
 export const adminUser: AdminUser = {
   id: "admin-1",
@@ -198,7 +201,7 @@ export const adminListItems: AdminListItem[] = [
     role: SystemRole.SUPERADMIN,
     is_active: true,
     is_root_superadmin: true,
-    permissions: ALL_PERMISSIONS,
+    permissions: ADMIN_PERMISSIONS,
     created_at: "2026-01-01T00:00:00Z",
   },
   {
@@ -209,7 +212,7 @@ export const adminListItems: AdminListItem[] = [
     role: SystemRole.SUPERADMIN,
     is_active: true,
     is_root_superadmin: false,
-    permissions: ALL_PERMISSIONS,
+    permissions: ADMIN_PERMISSIONS,
     created_at: "2026-01-02T00:00:00Z",
   },
   {
@@ -230,7 +233,7 @@ export const mockPermissionCatalog = async (page: Page): Promise<void> => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ permissions: ALL_PERMISSIONS }),
+      body: JSON.stringify({ permissions: ADMIN_PERMISSIONS }),
     });
   });
 };

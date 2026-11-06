@@ -117,4 +117,31 @@ describe("UsersTable", () => {
     await user.click(within(menu).getByText(/admin:users\.rowActions\.delete/));
     expect(props.onAction).toHaveBeenCalledWith("delete", active);
   });
+
+  it("offers no row menu on an admin row without admins:write", () => {
+    const props = makeProps();
+    renderWithProviders(
+      <UsersTable rows={[{ ...active, role: SystemRole.ADMIN }]} isLoading={false} {...props} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /admin:users\.rowActions\.menu/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("drops delete from an admin row without admins:delete", async () => {
+    const user = userEvent.setup();
+    const props = makeProps();
+    renderWithProviders(
+      <UsersTable
+        rows={[{ ...active, role: SystemRole.ADMIN }]}
+        isLoading={false}
+        {...props}
+        adminTier={{ canWriteAdmins: true, canDeleteAdmins: false, isViewerSuperadmin: false }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /admin:users\.rowActions\.menu/ }));
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText(/admin:users\.rowActions\.suspend/)).toBeInTheDocument();
+    expect(within(menu).queryByText(/admin:users\.rowActions\.delete/)).not.toBeInTheDocument();
+  });
 });

@@ -57,9 +57,11 @@ const SessionRow = ({ session }: SessionRowProps) => {
 
 interface UserSessionsCardProps {
   userId: string;
+  // Terminating sessions of an admin account needs admins:write.
+  canRevoke?: boolean;
 }
 
-export function UserSessionsCard({ userId }: UserSessionsCardProps) {
+export function UserSessionsCard({ userId, canRevoke = true }: UserSessionsCardProps) {
   const { t } = useTranslation("admin");
   const [limit, setLimit] = useState(PAGE_SIZE);
   const { data, isLoading } = useAdminUserSessions(userId, { limit });
@@ -103,7 +105,7 @@ export function UserSessionsCard({ userId }: UserSessionsCardProps) {
           <CardTitle className="text-base">{t("userDetail.sessions.title")}</CardTitle>
           <CardDescription>{t("userDetail.sessions.description")}</CardDescription>
         </div>
-        {sessions.length > 0 ? (
+        {canRevoke && sessions.length > 0 ? (
           <Button
             variant="outline"
             size="sm"

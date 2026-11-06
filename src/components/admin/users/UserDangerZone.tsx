@@ -8,23 +8,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { UserActionKind } from "@/hooks/api/use-user-actions";
 import type { AdminUser } from "@/lib/types/admin";
 
-interface UserDangerZoneCaps {
-  canResetPassword: boolean;
-  canSuspend: boolean;
-  canDelete: boolean;
-  canUnlock: boolean;
-}
+import {
+  NO_ADMIN_TIER_CAPS,
+  capsForTarget,
+  type AdminTierCaps,
+  type UserActionCaps,
+} from "./target-caps";
 
 interface UserDangerZoneProps {
   user: AdminUser;
   isSelf: boolean;
   disabled: boolean;
-  caps: UserDangerZoneCaps;
+  caps: UserActionCaps;
+  // The viewer's admin-tier keys, needed when the target is an admin account.
+  adminTier?: AdminTierCaps;
   onAction: (kind: UserActionKind) => void;
 }
 
-export function UserDangerZone({ user, isSelf, disabled, caps, onAction }: UserDangerZoneProps) {
+export function UserDangerZone({
+  user,
+  isSelf,
+  disabled,
+  caps: viewerCaps,
+  adminTier = NO_ADMIN_TIER_CAPS,
+  onAction,
+}: UserDangerZoneProps) {
   const { t } = useTranslation("admin");
+  const caps = capsForTarget(viewerCaps, user.role, adminTier);
 
   // Nothing destructive is permitted — omit the section entirely rather than
   // showing disabled buttons that would never fire a request.

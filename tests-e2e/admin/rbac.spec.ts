@@ -1,5 +1,7 @@
 import { Permission } from "@/lib/types/permissions";
 
+import enErrors from "../../src/i18n/locales/en/errors.json";
+import trErrors from "../../src/i18n/locales/tr/errors.json";
 import { test, expect } from "../base-test";
 import {
   adminUser,
@@ -8,6 +10,7 @@ import {
   mockAdminActivities,
   mockAdminsList,
   mockAdminStats,
+  mockAdminUserDetail,
   mockAdminUsersList,
   mockMe,
   mockPermissionCatalog,
@@ -205,6 +208,165 @@ for (const locale of LOCALES) {
 
       const nav = page.locator("nav").first();
       await expect(nav.getByRole("link", { name: s.shell.nav.profile, exact: true })).toBeVisible();
+    });
+  });
+}
+
+const errorsByLocale = { en: enErrors, tr: trErrors } as const;
+
+const stamp = { created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
+
+const memberRole = {
+  id: "role-member",
+  key: "member",
+  name: "Member",
+  description: null,
+  audience: "user",
+  is_system: true,
+  permission_sets: [],
+  ...stamp,
+};
+const premiumRole = {
+  ...memberRole,
+  id: "role-premium",
+  key: "premium",
+  name: "Premium",
+  is_system: false,
+};
+
+for (const locale of LOCALES) {
+  const s = getStrings(locale).admin;
+  const errors = errorsByLocale[locale];
+
+  test.describe(`Admin roles and permission sets [${locale}]`, () => {
+    test("nav lists only the access-control pages the admin may read", async ({ page }) => {
+      const reader = makeAdmin([Permission.RolesRead, Permission.StatsRead]);
+      await injectSession(page, reader, locale);
+      await mockMe(page, reader);
+      await mockAdminStats(page);
+
+      await page.goto(`/${locale}/admin/dashboard`);
+      const nav = page.locator("nav").first();
+      await expect(nav.getByRole("link", { name: s.shell.nav.roles, exact: true })).toBeVisible();
+      await expect(
+        nav.getByRole("link", { name: s.shell.nav["permission-sets"], exact: true }),
+      ).toHaveCount(0);
+    });
+
+    test("an admin without the read permission gets the forbidden state", async ({ page }) => {
+      const limited = makeAdmin([Permission.UsersRead]);
+      await injectSession(page, limited, locale);
+      await mockMe(page, limited);
+
+      await page.goto(`/${locale}/admin/roles`);
+      await expect(page.getByText(s.permissionDenied.title)).toBeVisible();
+    });
+
+    test("a system role has no delete and a refused delete says why", async ({ page }) => {
+      const writer = makeAdmin([
+        Permission.RolesRead,
+        Permission.RolesWrite,
+        Permission.PermissionSetsRead,
+      ]);
+      await injectSession(page, writer, locale);
+      await mockMe(page, writer);
+      await page.route(/.*\/api\/v1\/admin\/rbac\/roles$/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: [memberRole, premiumRole] }),
+        });
+      });
+      await page.route(/.*\/api\/v1\/admin\/rbac\/roles\/role-premium$/, async (route) => {
+        await route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "error.rbac.role_in_use" }),
+        });
+      });
+
+      await page.goto(`/${locale}/admin/roles`);
+      const system = page.getByTestId("role-row-member");
+      await expect(system).toBeVisible();
+      await expect(system.getByRole("button", { name: new RegExp(s.rbac.delete) })).toHaveCount(0);
+
+      await page
+        .getByTestId("role-row-premium")
+        .getByRole("button", { name: new RegExp(s.rbac.delete) })
+        .click();
+      await page
+        .locator(".ant-modal-footer")
+        .getByRole("button", { name: s.rbac.roles.delete.confirm, exact: true })
+        .click();
+      await expect(page.getByTestId("rbac-api-error")).toHaveText(errors.error.rbac.role_in_use);
+    });
+
+    test("the user page shows the source of each permission and assigns a role with an expiry", async ({
+      page,
+    }) => {
+      const manager = makeAdmin([
+        Permission.UsersRead,
+        Permission.UsersWrite,
+        Permission.RolesRead,
+      ]);
+      await injectSession(page, manager, locale);
+      await mockMe(page, manager);
+      await mockAdminUserDetail(page, regularUser);
+      await mockAdminActivities(page);
+
+      const access = {
+        account_role: "user",
+        roles: [
+          {
+            id: "role-member",
+            key: "member",
+            name: "Member",
+            audience: "user",
+            expires_at: null,
+            expired: false,
+          },
+        ],
+        permission_sets: [],
+        direct_permissions: [],
+        effective: [
+          { permission: "self.profile:update", sources: [{ kind: "role", key: "member" }] },
+        ],
+      };
+      await page.route(/.*\/api\/v1\/admin\/users\/user-1\/access$/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(access),
+        });
+      });
+      await page.route(/.*\/api\/v1\/admin\/rbac\/roles$/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: [memberRole, premiumRole] }),
+        });
+      });
+      let putBody: string | null = null;
+      await page.route(/.*\/api\/v1\/admin\/users\/user-1\/roles$/, async (route) => {
+        putBody = route.request().postData();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(access),
+        });
+      });
+
+      await page.goto(`/${locale}/admin/users/${regularUser.id}`);
+      const row = page.getByTestId("effective-self.profile:update");
+      await expect(row).toBeVisible();
+      await expect(row).toContainText(`${s.rbac.access.source.role} · member`);
+
+      await page.getByRole("button", { name: s.rbac.access.manageRoles }).click();
+      await page.getByRole("checkbox", { name: /Premium/ }).check();
+      await page.locator('input[type="datetime-local"]').fill("2030-01-02T10:00");
+      await page.getByRole("button", { name: s.rbac.access.assign.save }).click();
+
+      await expect.poll(() => putBody).toContain('"id":"role-premium","expires_at":"');
     });
   });
 }

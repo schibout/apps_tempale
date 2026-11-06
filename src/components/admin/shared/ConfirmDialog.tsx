@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   isLoading?: boolean;
   destructive?: boolean;
+  // Extra content under the description, e.g. why the last attempt was refused.
+  children?: React.ReactNode;
 }
 
 export function ConfirmDialog({
@@ -24,6 +26,7 @@ export function ConfirmDialog({
   onConfirm,
   isLoading = false,
   destructive = false,
+  children,
 }: ConfirmDialogProps) {
   return (
     <Modal
@@ -60,6 +63,7 @@ export function ConfirmDialog({
       }
     >
       <p className="text-sm text-muted-foreground">{description}</p>
+      {children}
     </Modal>
   );
 }

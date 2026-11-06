@@ -101,4 +101,30 @@ describe("UserDangerZone", () => {
       expect(button).toBeDisabled();
     }
   });
+
+  describe("on an admin account", () => {
+    const adminTarget = { ...baseUser, role: SystemRole.ADMIN };
+    const tier = { canWriteAdmins: true, canDeleteAdmins: true, isViewerSuperadmin: false };
+
+    it("hides every action without admins:write", () => {
+      renderZone({ user: adminTarget });
+      expect(screen.queryByTestId("admin-user-danger-zone")).not.toBeInTheDocument();
+    });
+
+    it("hides delete without admins:delete but keeps the writes", () => {
+      renderZone({ user: adminTarget, adminTier: { ...tier, canDeleteAdmins: false } });
+      expect(screen.getByRole("button", { name: /admin:userDetail\.suspend/ })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /admin:userDetail\.delete/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers everything with admins:write and admins:delete", () => {
+      renderZone({ user: adminTarget, adminTier: tier });
+      expect(screen.getByRole("button", { name: /admin:userDetail\.delete/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /admin:userDetail\.changePassword/ }),
+      ).toBeInTheDocument();
+    });
+  });
 });

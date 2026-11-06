@@ -19,10 +19,13 @@ import { useAdminUsers } from "@/hooks/api/use-admin";
 import { useUserActions, type UserActionKind } from "@/hooks/api/use-user-actions";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
+  useCanDeleteAdmins,
   useCanDeleteUsers,
   useCanResetUserPassword,
   useCanSuspendUsers,
   useCanUnlockUsers,
+  useCanWriteAdmins,
+  useIsSuperadmin,
 } from "@/hooks/use-permissions";
 import type { AdminUser } from "@/lib/types/admin";
 import { useAuthStore } from "@/stores/auth.store";
@@ -66,6 +69,11 @@ export function UsersContent() {
     canResetPassword: useCanResetUserPassword(),
     canDelete: useCanDeleteUsers(),
     canUnlock: useCanUnlockUsers(),
+  };
+  const adminTier = {
+    canWriteAdmins: useCanWriteAdmins(),
+    canDeleteAdmins: useCanDeleteAdmins(),
+    isViewerSuperadmin: useIsSuperadmin(),
   };
 
   const hasFilters = searchInput !== "" || role !== "all" || status !== "all" || verified !== "all";
@@ -129,6 +137,7 @@ export function UsersContent() {
             isLoading={isLoading && !data}
             currentUserId={currentUserId}
             caps={caps}
+            adminTier={adminTier}
             onAction={(kind, user) => {
               setPending({ kind, user });
             }}

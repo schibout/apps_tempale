@@ -10,6 +10,8 @@ const noCaps: AdminNavCaps = {
   canReadBroadcasts: false,
   canReadSystemSettings: false,
   canReadAdmins: false,
+  canReadRoles: false,
+  canReadPermissionSets: false,
 };
 
 const itemKeys = (caps: AdminNavCaps): string[] =>
@@ -22,6 +24,14 @@ describe("buildAdminNav", () => {
 
   it("hides the admins entry without admins:read", () => {
     expect(itemKeys({ ...noCaps, canReadUsers: true })).not.toContain("admins");
+  });
+
+  it("shows the access-control entries only to accounts holding the read permissions", () => {
+    expect(itemKeys({ ...noCaps, canReadRoles: true })).toContain("roles");
+    expect(itemKeys({ ...noCaps, canReadRoles: true })).not.toContain("permission-sets");
+    expect(itemKeys({ ...noCaps, canReadPermissionSets: true })).toContain("permission-sets");
+    expect(itemKeys(noCaps)).not.toContain("roles");
+    expect(itemKeys(noCaps)).not.toContain("permission-sets");
   });
 
   it("drops a section left without any item", () => {

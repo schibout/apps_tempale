@@ -71,6 +71,14 @@
     "title": "Admin Yönetimi",
     "description": "Admin atayın, izinleri yönetin ve admin erişimini kaldırın."
   },
+  "adminRoles": {
+    "title": "Roller",
+    "description": "İzin setlerinden roller oluşturun ve her rolün ne verdiğini inceleyin."
+  },
+  "adminPermissionSets": {
+    "title": "İzin Setleri",
+    "description": "İzinleri rollerin ve hesapların taşıyabileceği setlerde toplayın."
+  },
   "adminFiles": {
     "title": "Dosya Yönetimi",
     "description": "Platformdaki yüklenen dosyaları inceleyin, filtreleyin ve silin."

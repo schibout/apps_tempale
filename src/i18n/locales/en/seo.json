@@ -71,6 +71,14 @@
     "title": "Admin Management",
     "description": "Promote admins, assign permissions, and revoke admin access."
   },
+  "adminRoles": {
+    "title": "Roles",
+    "description": "Create roles from permission sets and review what each one gives."
+  },
+  "adminPermissionSets": {
+    "title": "Permission Sets",
+    "description": "Group permissions into sets that roles and accounts can hold."
+  },
   "adminFiles": {
     "title": "File Management",
     "description": "Review, filter, and delete uploaded files across the platform."

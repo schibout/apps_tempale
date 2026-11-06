@@ -10,6 +10,8 @@ import { useTranslation } from "react-i18next";
 
 import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { StatusBadge, UserStatusBadge } from "@/components/admin/shared/StatusBadge";
+import { canMutateTarget } from "@/components/admin/users/target-caps";
+import { UserAccessPanel } from "@/components/admin/users/UserAccessPanel";
 import { UserActionDialogs } from "@/components/admin/users/UserActionDialogs";
 import { UserActivityCard } from "@/components/admin/users/UserActivityCard";
 import { UserAvatarCard } from "@/components/admin/users/UserAvatarCard";
@@ -22,12 +24,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAdminUser, useUpdateAdminUser } from "@/hooks/api/use-admin";
 import { useUserActions, type UserActionKind } from "@/hooks/api/use-user-actions";
 import {
+  useCanDeleteAdmins,
   useCanDeleteUsers,
   useCanManageUserSessions,
   useCanResetUserPassword,
   useCanSuspendUsers,
   useCanUnlockUsers,
+  useCanWriteAdmins,
   useCanWriteUsers,
+  useIsSuperadmin,
 } from "@/hooks/use-permissions";
 import { ROUTES, getLocaleFromPath, getLocalizedPath } from "@/lib/config/routes";
 import type { AdminUserUpdatePayload } from "@/lib/types/admin";
@@ -45,7 +50,12 @@ export function UserDetailContent({ userId }: { userId: string }) {
   const update = useUpdateAdminUser();
   const { run, isLoading: isActionLoading } = useUserActions();
 
-  const canWrite = useCanWriteUsers();
+  const canWriteUsers = useCanWriteUsers();
+  const adminTier = {
+    canWriteAdmins: useCanWriteAdmins(),
+    canDeleteAdmins: useCanDeleteAdmins(),
+    isViewerSuperadmin: useIsSuperadmin(),
+  };
   const canManageSessions = useCanManageUserSessions();
   const dangerCaps = {
     canResetPassword: useCanResetUserPassword(),
@@ -66,6 +76,10 @@ export function UserDetailContent({ userId }: { userId: string }) {
   }
 
   const isSelf = currentUserId === user.id;
+  // On an admin-tier account the API asks for admins:write on top of users:write
+  // for every change, so the edit form, avatar and session actions follow.
+  const targetMutable = canMutateTarget(user.role, adminTier);
+  const canWrite = canWriteUsers && targetMutable;
 
   const handleSave = (payload: AdminUserUpdatePayload) => {
     update.mutate({ id: user.id, payload });
@@ -137,7 +151,9 @@ export function UserDetailContent({ userId }: { userId: string }) {
                 <CardDescription>{t("userDetail.editDescription")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <PermissionNote />
+                <PermissionNote
+                  text={canWriteUsers ? t("userDetail.adminTargetRestricted") : undefined}
+                />
               </CardContent>
             </Card>
           )}
@@ -148,13 +164,16 @@ export function UserDetailContent({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {canManageSessions ? <UserSessionsCard userId={user.id} /> : null}
+      {canManageSessions ? <UserSessionsCard userId={user.id} canRevoke={targetMutable} /> : null}
+
+      <UserAccessPanel user={user} isSelf={isSelf} />
 
       <UserDangerZone
         user={user}
         isSelf={isSelf}
         disabled={isActionLoading}
         caps={dangerCaps}
+        adminTier={adminTier}
         onAction={setAction}
       />
 

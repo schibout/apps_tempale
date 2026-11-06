@@ -9,12 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import type { Permission } from "@/lib/types/permissions";
+import { RbacAudience } from "@/lib/types/rbac";
 
 interface PermissionMatrixProps {
   catalog: Permission[];
   value: Permission[];
   onChange: (next: Permission[]) => void;
   disabled?: boolean;
+  // The population the grid is for: `user` offers only the self-service keys a
+  // user may hold, `admin` (or none) offers the whole catalog.
+  audience?: RbacAudience;
 }
 
 interface PermissionGroup {
@@ -34,9 +38,25 @@ function groupByResource(catalog: Permission[]): PermissionGroup[] {
   return groups;
 }
 
-export function PermissionMatrix({ catalog, value, onChange, disabled }: PermissionMatrixProps) {
+const SELF_PREFIX = "self.";
+
+export function PermissionMatrix({
+  catalog,
+  value,
+  onChange,
+  disabled,
+  audience,
+}: PermissionMatrixProps) {
   const { t } = useTranslation("admin");
-  const groups = useMemo(() => groupByResource(catalog), [catalog]);
+  const groups = useMemo(
+    () =>
+      groupByResource(
+        audience === RbacAudience.User
+          ? catalog.filter((permission) => permission.startsWith(SELF_PREFIX))
+          : catalog,
+      ),
+    [catalog, audience],
+  );
   const selected = useMemo(() => new Set(value), [value]);
   const [query, setQuery] = useState("");
 

@@ -27,7 +27,7 @@
     "columns": {
       "admin": "Admin",
       "role": "Rol",
-      "permissions": "İzinler",
+      "permissions": "Doğrudan izinler",
       "created": "Oluşturulma",
       "actions": "İşlemler"
     },
@@ -85,7 +85,9 @@
       "codePlaceholder": "6 haneli kod",
       "confirm": "Devri onayla",
       "cancel": "İptal"
-    }
+    },
+    "directPermissionsHint": "Yalnızca doğrudan verilen izinler. Rollerle ve izin setleriyle gelen izinler sayılmaz: görmek için erişim panelini açın.",
+    "viewAccess": "Erişimi görüntüle"
   },
   "permissions": {
     "selectAll": "Tümü",
@@ -100,7 +102,15 @@
       "stats": "İstatistikler",
       "roles": "Roller",
       "permission_sets": "İzin setleri",
-      "admins": "Yöneticiler"
+      "admins": "Yöneticiler",
+      "broadcast": "Duyurular",
+      "system_settings": "Sistem ayarları",
+      "self": {
+        "profile": "Profilim",
+        "files": "Dosyalarım",
+        "notifications": "Bildirimlerim",
+        "support": "Destek taleplerim"
+      }
     },
     "action": {
       "read": "Görüntüle",
@@ -111,7 +121,11 @@
       "sessions": "Oturumları yönet",
       "unlock": "Hesap kilidini aç",
       "mfa_reset": "MFA sıfırla",
-      "update": "Ata"
+      "update": "Ata",
+      "upload": "Yükle",
+      "create": "Oluştur",
+      "reply": "Yanıtla",
+      "close": "Kapat"
     }
   },
   "shell": {
@@ -123,7 +137,8 @@
       "overview": "Genel Bakış",
       "management": "Yönetim",
       "monitoring": "İzleme",
-      "account": "Hesap"
+      "account": "Hesap",
+      "accessControl": "Erişim denetimi"
     },
     "nav": {
       "dashboard": "Panel",
@@ -135,7 +150,9 @@
       "notifications": "Bildirimler",
       "broadcasts": "Duyurular",
       "system-settings": "Sistem Ayarları",
-      "profile": "Profil"
+      "profile": "Profil",
+      "roles": "Roller",
+      "permission-sets": "İzin setleri"
     },
     "signedInAs": "Giriş yapılan hesap",
     "exit": "Yönetimden çık",
@@ -270,7 +287,8 @@
     "unsuspend": "Askıyı kaldır",
     "unlock": "Hesabın kilidini aç",
     "delete": "Kullanıcıyı sil",
-    "deleting": "Siliniyor..."
+    "deleting": "Siliniyor...",
+    "adminTargetRestricted": "Bir admin hesabını değiştirmek admins:write izni gerektirir; bu yüzden gizlendi ve istek gönderilmez."
   },
   "confirm": {
     "deleteTitle": "Bu kullanıcı silinsin mi?",
@@ -376,5 +394,122 @@
     "unknownAccount": "Bilinmeyen hesap",
     "empty": "Seçili filtrelerle eşleşen aktivite yok.",
     "loading": "Aktiviteler yükleniyor..."
+  },
+  "rbac": {
+    "audience": {
+      "label": "Hedef kitle",
+      "user": "Kullanıcılar",
+      "admin": "Yöneticiler"
+    },
+    "audienceHint": {
+      "user": "Normal hesaplar için: yalnızca kendi hesabına yönelik izinler.",
+      "admin": "Yönetim paneli hesapları için: her izin."
+    },
+    "system": "Sistem",
+    "systemReadOnly": "Sistem öğeleri değiştirilemez veya silinemez.",
+    "cancel": "İptal",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor...",
+    "create": "Oluştur",
+    "close": "Kapat",
+    "edit": "Düzenle",
+    "view": "Görüntüle",
+    "delete": "Sil",
+    "rowActions": "Satır işlemleri",
+    "fields": {
+      "key": "Anahtar",
+      "keyHint": "Küçük harf, rakam ve alt çizgi; parçalar nokta ile ayrılır. Oluşturulduktan sonra değişmez.",
+      "name": "Ad",
+      "description": "Açıklama"
+    },
+    "validation": {
+      "keyInvalid": "Harfle başlayan küçük harf, rakam ve alt çizgi kullanın.",
+      "nameRequired": "Ad zorunludur."
+    },
+    "roles": {
+      "title": "Roller",
+      "subtitle": "Rol, izin setlerini bir araya getirir ve hesaplara atanır.",
+      "create": "Rol oluştur",
+      "createTitle": "Rol oluştur",
+      "editTitle": "Rolü düzenle · {{name}}",
+      "viewTitle": "Rol · {{name}}",
+      "loading": "Roller yükleniyor...",
+      "empty": "Henüz rol yok.",
+      "columns": {
+        "role": "Rol",
+        "audience": "Hedef kitle",
+        "sets": "İzin setleri",
+        "actions": "İşlemler"
+      },
+      "setsLabel": "İzin setleri",
+      "noSets": "Yok",
+      "noSetsAvailable": "Bu hedef kitle için henüz izin seti yok.",
+      "delete": {
+        "title": "Rolü sil",
+        "description": "{{name}} rolü silinsin mi? Bu işlem geri alınamaz.",
+        "confirm": "Rolü sil"
+      }
+    },
+    "sets": {
+      "title": "İzin setleri",
+      "subtitle": "İzin seti, rollerin içerdiği adlandırılmış bir izin grubudur.",
+      "create": "İzin seti oluştur",
+      "createTitle": "İzin seti oluştur",
+      "editTitle": "İzin setini düzenle · {{name}}",
+      "viewTitle": "İzin seti · {{name}}",
+      "loading": "İzin setleri yükleniyor...",
+      "empty": "Henüz izin seti yok.",
+      "columns": {
+        "set": "İzin seti",
+        "audience": "Hedef kitle",
+        "permissions": "İzinler",
+        "actions": "İşlemler"
+      },
+      "permissionsLabel": "İzinler",
+      "permissionCount": "{{count}} izin",
+      "delete": {
+        "title": "İzin setini sil",
+        "description": "{{name}} izin seti silinsin mi? Bu işlem geri alınamaz.",
+        "confirm": "İzin setini sil"
+      }
+    },
+    "access": {
+      "title": "Erişim",
+      "description": "Bu hesabın sahip olduğu roller, izin setleri ve izinler ile her birinin kaynağı.",
+      "loading": "Erişim yükleniyor...",
+      "roles": "Roller",
+      "permissionSets": "İzin setleri",
+      "directPermissions": "Doğrudan izinler",
+      "directHint": "Doğrudan izinler Admin yönetimi sayfasında düzenlenir.",
+      "openAdmins": "Admin yönetimini aç",
+      "none": "Yok",
+      "expires": "Bitiş: {{date}}",
+      "expired": "Süresi doldu",
+      "effective": "Geçerli izinler",
+      "effectiveEmpty": "Bu hesabın hiçbir izni yok.",
+      "source": {
+        "role": "Rol",
+        "permission_set": "İzin seti",
+        "direct": "Doğrudan verilen",
+        "superadmin": "Superadmin katmanı"
+      },
+      "manageRoles": "Rolleri yönet",
+      "manageSets": "İzin setlerini yönet",
+      "superadminNote": "Superadmin, katmanı gereği her izne sahiptir. Ona rol veya izin seti atanamaz.",
+      "selfNote": "Kendi erişiminizi değiştiremezsiniz.",
+      "forbiddenNote": "Bir admin hesabının erişimini görmek admins:read izni gerektirir.",
+      "assign": {
+        "rolesTitle": "Roller · {{email}}",
+        "setsTitle": "İzin setleri · {{email}}",
+        "expiresLabel": "Bitiş zamanı",
+        "expiresHint": "Süresiz için boş bırakın.",
+        "noOptions": "Atanacak bir şey yok.",
+        "promoteWarning": "Bir admin rolü veya izin seti atamak, bu hesaba yönetim paneli erişimi verir.",
+        "demoteWarning": "Geriye admin rolü, izin seti veya doğrudan izin kalmazsa bu hesap yönetim paneli erişimini kaybeder ve normal kullanıcı olur.",
+        "userRoleRequired": "En az bir süresiz kullanıcı rolü kalmalı.",
+        "save": "Atamaları kaydet",
+        "expiredBadge": "Süresi doldu"
+      }
+    }
   }
 }

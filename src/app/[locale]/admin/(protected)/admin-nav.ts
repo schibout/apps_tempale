@@ -3,9 +3,11 @@ import {
   Bell,
   CircleUser,
   Images,
+  KeyRound,
   LayoutDashboard,
   Megaphone,
   Settings,
+  ShieldCheck,
   Ticket,
   UserCog,
   Users,
@@ -37,6 +39,8 @@ export interface AdminNavCaps {
   canReadBroadcasts: boolean;
   canReadSystemSettings: boolean;
   canReadAdmins: boolean;
+  canReadRoles: boolean;
+  canReadPermissionSets: boolean;
 }
 
 export const buildAdminNav = (caps: AdminNavCaps): AdminNavSection[] => {
@@ -62,6 +66,18 @@ export const buildAdminNav = (caps: AdminNavCaps): AdminNavSection[] => {
           href: ROUTES.adminSystemSettings,
           icon: Settings,
           show: caps.canReadSystemSettings,
+        },
+      ],
+    },
+    {
+      key: "accessControl",
+      items: [
+        { key: "roles", href: ROUTES.adminRoles, icon: ShieldCheck, show: caps.canReadRoles },
+        {
+          key: "permission-sets",
+          href: ROUTES.adminPermissionSets,
+          icon: KeyRound,
+          show: caps.canReadPermissionSets,
         },
       ],
     },

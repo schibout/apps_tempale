@@ -32,12 +32,12 @@ import { formatDate } from "@/lib/format-date";
 import type { AdminUser } from "@/lib/types/admin";
 import { SystemRole } from "@/lib/types/user";
 
-interface UserActionCaps {
-  canSuspend: boolean;
-  canResetPassword: boolean;
-  canDelete: boolean;
-  canUnlock: boolean;
-}
+import {
+  NO_ADMIN_TIER_CAPS,
+  capsForTarget,
+  type AdminTierCaps,
+  type UserActionCaps,
+} from "./target-caps";
 
 // Distinct badge tone per role so the three tiers are visually separable in the
 // list (previously superadmin and user both rendered as muted).
@@ -52,6 +52,9 @@ interface UsersTableProps {
   isLoading: boolean;
   currentUserId: string | null;
   caps: UserActionCaps;
+  // The viewer's admin-tier keys: an admin or superadmin row only offers the
+  // actions the API accepts for them. Omitted means none.
+  adminTier?: AdminTierCaps;
   onAction: (kind: UserActionKind, user: AdminUser) => void;
 }
 
@@ -132,12 +135,17 @@ const buildRowMenu = ({ user, isSelf, onAction, t, caps }: RowMenuArgs): MenuPro
   return items;
 };
 
-export function UsersTable({ rows, isLoading, currentUserId, caps, onAction }: UsersTableProps) {
+export function UsersTable({
+  rows,
+  isLoading,
+  currentUserId,
+  caps,
+  adminTier = NO_ADMIN_TIER_CAPS,
+  onAction,
+}: UsersTableProps) {
   const { t } = useTranslation("admin");
   const pathname = usePathname();
   const currentLocale = getLocaleFromPath(pathname);
-  const hasRowActions =
-    caps.canSuspend || caps.canResetPassword || caps.canDelete || caps.canUnlock;
 
   return (
     <AdminTable>
@@ -152,6 +160,12 @@ export function UsersTable({ rows, isLoading, currentUserId, caps, onAction }: U
       <AdminTbody>
         {rows.map((user) => {
           const isSelf = currentUserId === user.id;
+          const rowCaps = capsForTarget(caps, user.role, adminTier);
+          const hasRowActions =
+            rowCaps.canSuspend ||
+            rowCaps.canResetPassword ||
+            rowCaps.canDelete ||
+            rowCaps.canUnlock;
           return (
             <AdminTr key={user.id}>
               <AdminTd className="text-start">
@@ -203,7 +217,7 @@ export function UsersTable({ rows, isLoading, currentUserId, caps, onAction }: U
                   </Button>
                   {hasRowActions ? (
                     <Dropdown
-                      menu={{ items: buildRowMenu({ user, isSelf, onAction, t, caps }) }}
+                      menu={{ items: buildRowMenu({ user, isSelf, onAction, t, caps: rowCaps }) }}
                       trigger={["click"]}
                       placement="bottomRight"
                     >

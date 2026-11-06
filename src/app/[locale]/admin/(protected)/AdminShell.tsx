@@ -14,6 +14,8 @@ import {
   useCanReadAdmins,
   useCanReadBroadcasts,
   useCanReadFiles,
+  useCanReadPermissionSets,
+  useCanReadRoles,
   useCanReadSupport,
   useCanReadSystemSettings,
   useCanReadUsers,
@@ -59,6 +61,8 @@ export function AdminShell({ children }: AdminShellProps) {
   const canReadBroadcasts = useCanReadBroadcasts();
   const canReadSystemSettings = useCanReadSystemSettings();
   const canReadAdmins = useCanReadAdmins();
+  const canReadRoles = useCanReadRoles();
+  const canReadPermissionSets = useCanReadPermissionSets();
   const currentLocale = getLocaleFromPath(pathname);
   const pathWithoutLocale = getPathWithoutLocale(pathname);
 
@@ -112,6 +116,8 @@ export function AdminShell({ children }: AdminShellProps) {
     canReadBroadcasts,
     canReadSystemSettings,
     canReadAdmins,
+    canReadRoles,
+    canReadPermissionSets,
   });
 
   const closeOnMobile = () => {

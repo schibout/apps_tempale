@@ -72,6 +72,38 @@ export const test = base.extend({
       },
     );
 
+    // The access panel mounts on the admin user-detail page and fires GET
+    // /admin/users/:id/access, plus the role and permission-set lists that feed
+    // its assignment dialog. Unmocked they hit the catch-all 401 and trip the
+    // logout cascade, so answer GETs with an account holding nothing by default.
+    // Specs that assert on access register their own routes (precedence).
+    await page.route(
+      (url) =>
+        url.pathname.includes("/api/v1/admin/") &&
+        (url.pathname.endsWith("/access") || url.pathname.includes("/admin/rbac/")),
+      async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.fallback();
+          return;
+        }
+        const pathname = new URL(route.request().url()).pathname;
+        const body = pathname.endsWith("/access")
+          ? {
+              account_role: "user",
+              roles: [],
+              permission_sets: [],
+              direct_permissions: [],
+              effective: [],
+            }
+          : { data: [] };
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(body),
+        });
+      },
+    );
+
     // The AnnouncementBanner mounts in the global layout, so EVERY authenticated
     // page fires GET /announcements/active on load. Unmocked, it hits the
     // catch-all 401 and trips the logout cascade, bouncing the page to /login —
