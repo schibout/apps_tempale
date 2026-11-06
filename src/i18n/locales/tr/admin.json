@@ -97,7 +97,10 @@
       "files": "Dosyalar",
       "support": "Destek",
       "activities": "Aktiviteler",
-      "stats": "İstatistikler"
+      "stats": "İstatistikler",
+      "roles": "Roller",
+      "permission_sets": "İzin setleri",
+      "admins": "Yöneticiler"
     },
     "action": {
       "read": "Görüntüle",

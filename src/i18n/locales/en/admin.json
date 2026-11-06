@@ -97,7 +97,10 @@
       "files": "Files",
       "support": "Support",
       "activities": "Activities",
-      "stats": "Stats"
+      "stats": "Stats",
+      "roles": "Roles",
+      "permission_sets": "Permission sets",
+      "admins": "Admins"
     },
     "action": {
       "read": "View",
