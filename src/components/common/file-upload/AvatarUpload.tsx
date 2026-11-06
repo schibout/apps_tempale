@@ -30,8 +30,8 @@ interface AvatarUploadProps {
   allowedTypes?: readonly string[];
   maxSizeBytes?: number;
   disabled?: boolean;
-  // Disables only the Remove action (the picker follows `disabled`), for callers
-  // whose removal needs a different permission than picking a new file.
+  // Disables the Remove action. Defaults to `disabled`; set it explicitly for
+  // callers whose removal needs a different permission than picking a file.
   removeDisabled?: boolean;
   className?: string;
   // "circle" + "cover" is the avatar default. A logo (often transparent and
@@ -113,7 +113,7 @@ export function AvatarUpload({
   allowedTypes = DEFAULT_IMAGE_TYPES,
   maxSizeBytes = DEFAULT_MAX_UPLOAD_SIZE,
   disabled = false,
-  removeDisabled = false,
+  removeDisabled,
   className,
   shape = "circle",
   fit = "cover",
@@ -225,7 +225,7 @@ export function AvatarUpload({
           hasPending={Boolean(pendingFile)}
           hasValue={Boolean(value)}
           interactive={interactive}
-          canRemove={!removeDisabled && !upload.isPending}
+          canRemove={!(removeDisabled ?? disabled) && !upload.isPending}
           saving={upload.isPending}
           onSave={handleSave}
           onDiscard={clearPending}

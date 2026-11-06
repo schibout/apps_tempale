@@ -42,6 +42,19 @@ describe("AvatarUpload", () => {
     expect(screen.queryByRole("button", { name: /upload:remove/ })).not.toBeInTheDocument();
   });
 
+  it("disables Remove when disabled is set and removeDisabled is not", () => {
+    renderWithProviders(<AvatarUpload value={mockFile} onChange={vi.fn()} disabled />);
+    expect(screen.getByRole("button", { name: /upload:remove/ })).toBeDisabled();
+  });
+
+  it("lets removeDisabled override disabled for Remove only", () => {
+    renderWithProviders(
+      <AvatarUpload value={mockFile} onChange={vi.fn()} disabled removeDisabled={false} />,
+    );
+    expect(screen.getByRole("button", { name: /upload:replace/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /upload:remove/ })).toBeEnabled();
+  });
+
   it("shows preview/replace/remove actions when a file is set", () => {
     renderWithProviders(<AvatarUpload value={mockFile} onChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: /upload:replace/ })).toBeInTheDocument();
