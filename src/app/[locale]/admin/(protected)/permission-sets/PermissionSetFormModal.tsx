@@ -26,6 +26,10 @@ interface PermissionSetFormModalProps {
   // Keys the viewer may hand out; ignored in read-only mode, which shows the
   // set's own keys.
   catalog: Permission[];
+  // The catalog could not be loaded (or is still loading): the grid would be
+  // empty, so saving is blocked rather than sending a set without keys.
+  catalogFailed: boolean;
+  catalogLoading: boolean;
   onClose: () => void;
 }
 
@@ -35,7 +39,14 @@ interface BodyProps extends Omit<PermissionSetFormModalProps, "open"> {
 
 // Body is a child so `destroyOnHidden` remounts it per open and the form state
 // re-initialises from the edited set without a sync effect.
-function PermissionSetFormBody({ permissionSet, readOnly, catalog, onClose }: BodyProps) {
+function PermissionSetFormBody({
+  permissionSet,
+  readOnly,
+  catalog,
+  catalogFailed,
+  catalogLoading,
+  onClose,
+}: BodyProps) {
   const { t } = useTranslation("admin");
   const create = useCreatePermissionSet();
   const update = useUpdatePermissionSet();
@@ -51,7 +62,9 @@ function PermissionSetFormBody({ permissionSet, readOnly, catalog, onClose }: Bo
 
   const keyValid = permissionSet !== null || ELEMENT_KEY_PATTERN.test(key);
   const keyInvalid = permissionSet === null && key !== "" && !keyValid;
-  const canSubmit = !readOnly && keyValid && name.trim().length > 0 && !mutation.isPending;
+  const catalogBlocked = !readOnly && (catalogFailed || catalogLoading);
+  const canSubmit =
+    !readOnly && !catalogBlocked && keyValid && name.trim().length > 0 && !mutation.isPending;
 
   // A read-only view lists exactly what the set holds.
   const gridCatalog = readOnly ? (permissionSet?.permissions ?? []) : catalog;
@@ -150,6 +163,7 @@ function PermissionSetFormBody({ permissionSet, readOnly, catalog, onClose }: Bo
 
       <div className="space-y-1.5">
         <Label>{t("rbac.sets.permissionsLabel")}</Label>
+        {!readOnly && catalogFailed ? <PermissionNote text={t("rbac.catalogError")} /> : null}
         <PermissionMatrix
           catalog={gridCatalog}
           value={permissions}
@@ -185,6 +199,8 @@ export function PermissionSetFormModal({
   open,
   readOnly,
   catalog,
+  catalogFailed,
+  catalogLoading,
   onClose,
 }: PermissionSetFormModalProps) {
   const { t } = useTranslation("admin");
@@ -207,6 +223,8 @@ export function PermissionSetFormModal({
         permissionSet={permissionSet}
         readOnly={readOnly}
         catalog={catalog}
+        catalogFailed={catalogFailed}
+        catalogLoading={catalogLoading}
         onClose={onClose}
       />
     </Modal>

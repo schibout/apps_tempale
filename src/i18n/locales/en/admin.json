@@ -510,6 +510,8 @@
         "save": "Save assignments",
         "expiredBadge": "Expired"
       }
-    }
+    },
+    "genericError": "The request failed. Check the values and try again.",
+    "catalogError": "The permission list could not be loaded, so permissions cannot be edited now."
   }
 }

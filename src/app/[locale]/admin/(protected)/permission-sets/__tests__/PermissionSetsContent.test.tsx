@@ -136,4 +136,22 @@ describe("PermissionSetsContent", () => {
       permissions: [Permission.SelfProfileUpdate],
     });
   });
+
+  it("shows a note and blocks saving when the catalog cannot be loaded", async () => {
+    server.use(
+      http.get("*/api/v1/admin/rbac/permissions", () =>
+        HttpResponse.json({ detail: "error.auth.insufficient_permissions" }, { status: 403 }),
+      ),
+    );
+    signIn([Permission.PermissionSetsRead, Permission.PermissionSetsWrite]);
+    const user = userEvent.setup();
+    renderWithProviders(<PermissionSetsContent />);
+
+    await user.click(await screen.findByRole("button", { name: "admin:rbac.sets.create" }));
+    await user.type(await screen.findByLabelText("admin:rbac.fields.key"), "my_set");
+    await user.type(screen.getByLabelText("admin:rbac.fields.name"), "My set");
+
+    expect(await screen.findByText("admin:rbac.catalogError")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "admin:rbac.create" })).toBeDisabled();
+  });
 });

@@ -14,8 +14,9 @@ interface ApiErrorNoteProps {
 // the reason on screen next to the form or dialog that caused it.
 export function ApiErrorNote({ error }: ApiErrorNoteProps) {
   const { t } = useTranslation("errors");
+  const { t: ta } = useTranslation("admin");
   const key = getApiErrorKey(error);
-  if (!error || !key) return null;
+  if (!error) return null;
   return (
     <p
       role="alert"
@@ -23,7 +24,9 @@ export function ApiErrorNote({ error }: ApiErrorNoteProps) {
       className="mt-3 flex items-start gap-1.5 text-sm text-destructive"
     >
       <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-      {t(key, { defaultValue: key })}
+      {/* A body without a string key (a 422 whose detail is a list, a network
+          failure) still gets a line, so the form never fails silently. */}
+      {key ? t(key, { defaultValue: key }) : ta("rbac.genericError")}
     </p>
   );
 }

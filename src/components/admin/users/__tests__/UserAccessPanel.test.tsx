@@ -250,4 +250,36 @@ describe("UserAccessPanel", () => {
       screen.queryByRole("button", { name: "admin:rbac.access.manageRoles" }),
     ).not.toBeInTheDocument();
   });
+
+  it("warns that removing the last admin role demotes an admin to a user", async () => {
+    const adminRole = {
+      id: "role-agent",
+      key: "agent",
+      name: "Support agent",
+      audience: RbacAudience.Admin,
+      expires_at: null,
+      expired: false,
+    };
+    server.use(
+      http.get("*/api/v1/admin/users/:id/access", () =>
+        HttpResponse.json({
+          ...access,
+          account_role: SystemRole.ADMIN,
+          roles: [memberRole, adminRole],
+        }),
+      ),
+    );
+    viewer(SystemRole.ADMIN, FULL);
+    const user = userEvent.setup();
+    renderWithProviders(
+      <UserAccessPanel user={{ ...baseUser, role: SystemRole.ADMIN }} isSelf={false} />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "admin:rbac.access.manageRoles" }));
+    expect(screen.queryByTestId("assign-warning-demote")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("checkbox", { name: /Support agent/ }));
+    expect(screen.getByTestId("assign-warning-demote")).toHaveTextContent(
+      "admin:rbac.access.assign.demoteWarning",
+    );
+  });
 });

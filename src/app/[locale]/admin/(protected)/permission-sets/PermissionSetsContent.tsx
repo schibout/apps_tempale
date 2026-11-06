@@ -41,7 +41,8 @@ export function PermissionSetsContent() {
   const canWrite = useCanWritePermissionSets();
 
   const setsQuery = usePermissionSets(canRead);
-  // The catalog is only needed to edit; it rides roles:read on the API.
+  // The catalog is only needed to edit; the API opens it to roles:read and
+  // permission_sets:read alike.
   const catalogQuery = useRbacPermissionCatalog(canRead && canWrite);
   const deleteSet = useDeletePermissionSet();
 
@@ -159,6 +160,8 @@ export function PermissionSetsContent() {
         open={editing !== undefined}
         readOnly={editing ? !canWrite || editing.is_system : !canWrite}
         catalog={catalog}
+        catalogFailed={catalogQuery.isError}
+        catalogLoading={catalogQuery.isLoading}
         onClose={() => {
           setEditing(undefined);
         }}

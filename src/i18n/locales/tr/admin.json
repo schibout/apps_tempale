@@ -510,6 +510,8 @@
         "save": "Atamaları kaydet",
         "expiredBadge": "Süresi doldu"
       }
-    }
+    },
+    "genericError": "İstek başarısız oldu. Değerleri kontrol edip tekrar deneyin.",
+    "catalogError": "İzin listesi yüklenemedi; şu anda izinler düzenlenemez."
   }
 }
