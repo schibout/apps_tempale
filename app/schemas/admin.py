@@ -173,6 +173,7 @@ class AdminStats(BaseModel):
     users_verified: int
     users_admins: int
     activities_total: int
+    activities_today: int
 
 
 # --- Admin / RBAC management ------------------------------------------------

@@ -1,9 +1,16 @@
 """End-to-end tests for the GET /admin/stats dashboard endpoint."""
 
+from datetime import timedelta
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
-from app.tests.admin.conftest import register_and_verify
+from app.models.user import User
+from app.models.user_activity import UserActivity
+from app.tests.admin.conftest import promote_to_admin, register_and_verify
+from app.tests.conftest import TestingSessionLocal
+from app.utils import utc_now
 
 
 @pytest.mark.asyncio
@@ -46,6 +53,7 @@ async def test_stats_returns_expected_counts(admin_client: AsyncClient):
         "users_verified",
         "users_admins",
         "activities_total",
+        "activities_today",
     }
     assert body["users_total"] >= 4
     assert body["users_active"] >= 4
@@ -53,3 +61,39 @@ async def test_stats_returns_expected_counts(admin_client: AsyncClient):
     assert body["users_verified"] < body["users_total"]
     assert body["users_admins"] >= 1
     assert body["activities_total"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_activities_today_excludes_older_rows(admin_client: AsyncClient):
+    """activities_today counts only the current UTC day; activities_total counts all."""
+    before = (await admin_client.get("/admin/stats")).json()
+
+    async with TestingSessionLocal() as session:
+        user_id = (
+            await session.execute(select(User.id).where(User.email == "admin@test.com"))
+        ).scalar_one()
+        session.add(
+            UserActivity(
+                user_id=user_id,
+                activity_type="login",
+                resource_type="user",
+                created_at=utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
+                - timedelta(seconds=1),
+            )
+        )
+        await session.commit()
+
+    stats = (await admin_client.get("/admin/stats")).json()
+    assert stats["activities_today"] == before["activities_today"]
+    assert stats["activities_total"] == before["activities_total"] + 1
+    assert stats["activities_today"] < stats["activities_total"]
+
+
+@pytest.mark.asyncio
+async def test_users_admins_counts_superadmins(superadmin_client: AsyncClient):
+    """users_admins counts both admin and superadmin accounts."""
+    await register_and_verify(superadmin_client, "extra-admin@test.com")
+    await promote_to_admin("extra-admin@test.com")
+
+    stats = (await superadmin_client.get("/admin/stats")).json()
+    assert stats["users_admins"] == 2
