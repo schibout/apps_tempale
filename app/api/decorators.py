@@ -6,7 +6,7 @@ and mixing the two makes it harder to spot what is pure wrapper vs. DI.
 
 from __future__ import annotations
 
-import uuid
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from functools import wraps
 from typing import ParamSpec, TypeVar
@@ -18,11 +18,7 @@ from app.models.user import User
 from app.schemas.user_activity import ActivityStatus, ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 
-_UNKNOWN_USER_ID = uuid.UUID(int=0)
-"""Placeholder used when an unexpected failure fires before the caller is known.
-
-Kept explicit so audit-log readers can recognise the sentinel.
-"""
+logger = logging.getLogger(__name__)
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -38,9 +34,10 @@ def audit_unexpected_failure(
 
     ``HTTPException`` is passed through unchanged so FastAPI's own response
     logic still runs. Every other exception is recorded against the caller
-    (or ``_UNKNOWN_USER_ID`` when we cannot yet identify them) and re-raised
-    so the global exception handler can convert it to a 500 with the full
-    traceback intact.
+    (no user when we cannot yet identify them) and re-raised so the global
+    exception handler can convert it to a 500 with the full traceback intact.
+    The request's uncommitted work is rolled back first, and a failure of the
+    audit itself is logged without replacing the original exception.
     """
 
     def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
@@ -52,19 +49,30 @@ def audit_unexpected_failure(
                 raise
             except Exception as exc:
                 session = _find_kwarg(kwargs, AsyncSession)
-                request = _find_kwarg(kwargs, Request)
-                current_user = _find_kwarg(kwargs, User)
                 if session is not None:
-                    await log_activity(
-                        session=session,
-                        user_id=current_user.id if current_user else _UNKNOWN_USER_ID,
-                        activity_type=activity_type,
-                        resource_type=resource_type,
-                        status=ActivityStatus.FAILURE,
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        details={"error": str(exc), "endpoint": endpoint},
-                        request=request,
-                    )
+                    try:
+                        # Read the id first: the rollback expires loaded objects.
+                        current_user = _find_kwarg(kwargs, User)
+                        user_id = current_user.id if current_user else None
+                        # The audit commit must not persist the failed work.
+                        await session.rollback()
+                        await log_activity(
+                            session=session,
+                            user_id=user_id,
+                            activity_type=activity_type,
+                            resource_type=resource_type,
+                            status=ActivityStatus.FAILURE,
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            # Only the type: database error messages embed bound
+                            # parameters, which may be secrets.
+                            details={
+                                "error": type(exc).__name__,
+                                "endpoint": endpoint,
+                            },
+                            request=_find_kwarg(kwargs, Request),
+                        )
+                    except Exception:
+                        logger.exception("Failed to audit a failure of %s", endpoint)
                 raise
 
         return wrapper

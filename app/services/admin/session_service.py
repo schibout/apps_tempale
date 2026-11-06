@@ -5,15 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
-from app.core.realtime import account_topic, publish_safe
 from app.models.user import User
 from app.repositories.user import get_user_by_id
-from app.repositories.user_session import (
-    flag_sessions_revoked,
-    list_active_sessions,
-    revoke_all_sessions,
-)
-from app.schemas.account import AccountEvent, AccountEventType
+from app.repositories.user_session import list_active_sessions
 from app.schemas.user import SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.schemas.user_session import (
@@ -22,6 +16,7 @@ from app.schemas.user_session import (
     SessionsRevokedResponse,
 )
 from app.use_cases.log_activity import log_activity
+from app.use_cases.revoke_user_sessions import revoke_all_user_sessions
 
 
 async def _load_target(session: AsyncSession, user_id: uuid.UUID) -> User:
@@ -83,13 +78,7 @@ async def revoke_user_sessions_admin_service(
     target = await _load_target(session, user_id)
     _guard_superadmin_target(current_user, target)
 
-    revoked = await revoke_all_sessions(session, user_id=target.id)
-    if revoked:
-        await flag_sessions_revoked([row.id for row in revoked])
-        await publish_safe(
-            account_topic(target.id),
-            AccountEvent(type=AccountEventType.SESSIONS_REVOKED),
-        )
+    revoked = await revoke_all_user_sessions(session, target.id)
 
     await log_activity(
         session=session,
@@ -97,10 +86,10 @@ async def revoke_user_sessions_admin_service(
         activity_type=ActivityType.UPDATE,
         resource_type=ResourceType.USER,
         resource_id=target.id,
-        details={"action": "admin_revoked_sessions", "count": len(revoked)},
+        details={"action": "admin_revoked_sessions", "count": revoked},
         request=request,
     )
 
     return SessionsRevokedResponse(
-        revoked=len(revoked), message=SuccessMessages.ADMIN_SESSIONS_REVOKED
+        revoked=revoked, message=SuccessMessages.ADMIN_SESSIONS_REVOKED
     )

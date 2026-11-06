@@ -95,26 +95,34 @@ def test_hash_recovery_code_is_deterministic_hmac() -> None:
     assert len(h) == 64
 
 
-def test_production_refuses_mfa_disabled() -> None:
-    """ADMIN_MFA_REQUIRED=False is refused in production."""
-    with pytest.raises(ValidationError, match="ADMIN_MFA_REQUIRED"):
-        _settings(
-            ENVIRONMENT="production",
-            ADMIN_MFA_REQUIRED=False,
-            MFA_ENCRYPTION_KEY=Fernet.generate_key().decode(),
-        )
+def test_mfa_is_off_by_default() -> None:
+    """MFA is dormant unless explicitly enabled."""
+    assert Settings.model_fields["ADMIN_MFA_REQUIRED"].default is False
+    assert _settings().ADMIN_MFA_REQUIRED is False
 
 
-def test_non_local_requires_encryption_key() -> None:
-    """Outside local, a missing key is refused."""
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_non_local_boots_with_mfa_off_and_no_key(environment: str) -> None:
+    """With MFA off, no encryption key is needed and none is invented."""
+    s = _settings(ENVIRONMENT=environment)
+    assert s.ADMIN_MFA_REQUIRED is False
+    assert s.MFA_ENCRYPTION_KEY is None
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_non_local_with_mfa_on_requires_encryption_key(environment: str) -> None:
+    """Outside local, enabling MFA without a key is refused."""
     with pytest.raises(ValidationError, match="MFA_ENCRYPTION_KEY"):
-        _settings(ENVIRONMENT="staging")
+        _settings(ENVIRONMENT=environment, ADMIN_MFA_REQUIRED=True)
 
 
-def test_non_local_accepts_explicit_key() -> None:
-    """Staging with a valid key boots."""
+def test_non_local_with_mfa_on_accepts_explicit_key() -> None:
+    """Production with MFA on and a valid key boots."""
     key = Fernet.generate_key().decode()
-    s = _settings(ENVIRONMENT="staging", MFA_ENCRYPTION_KEY=key)
+    s = _settings(
+        ENVIRONMENT="production", ADMIN_MFA_REQUIRED=True, MFA_ENCRYPTION_KEY=key
+    )
+    assert s.ADMIN_MFA_REQUIRED is True
     assert s.MFA_ENCRYPTION_KEY == key
 
 
@@ -122,6 +130,12 @@ def test_invalid_key_is_refused() -> None:
     """A malformed key is refused even locally."""
     with pytest.raises(ValidationError, match="MFA_ENCRYPTION_KEY"):
         _settings(MFA_ENCRYPTION_KEY="not-a-fernet-key")
+
+
+def test_invalid_key_is_refused_with_mfa_off() -> None:
+    """A malformed key is refused in production even while MFA is off."""
+    with pytest.raises(ValidationError, match="MFA_ENCRYPTION_KEY"):
+        _settings(ENVIRONMENT="production", MFA_ENCRYPTION_KEY="not-a-fernet-key")
 
 
 def test_local_without_key_derives_one_from_secret_key() -> None:
@@ -132,9 +146,10 @@ def test_local_without_key_derives_one_from_secret_key() -> None:
     assert s.MFA_ENCRYPTION_KEY == _settings().MFA_ENCRYPTION_KEY
 
 
-def test_local_allows_mfa_disabled() -> None:
-    """ADMIN_MFA_REQUIRED=False stays allowed outside production."""
-    assert _settings(ADMIN_MFA_REQUIRED=False).ADMIN_MFA_REQUIRED is False
-    assert _settings().ADMIN_MFA_REQUIRED is True
+def test_local_allows_mfa_enabled_without_key() -> None:
+    """Locally MFA can be switched on without a key, and the defaults hold."""
+    s = _settings(ADMIN_MFA_REQUIRED=True)
+    assert s.ADMIN_MFA_REQUIRED is True
+    Fernet(s.MFA_ENCRYPTION_KEY)
     assert _settings().MFA_CHALLENGE_MINUTES == 5
     assert _settings().STEP_UP_TTL_SECONDS == 300

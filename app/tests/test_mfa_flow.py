@@ -13,11 +13,10 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
 
 from app.api.routes.admin.support import admin_feed_ws
 from app.cli import reset_mfa as reset_mfa_cli
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
 from app.core.mfa import (
@@ -205,17 +204,26 @@ async def test_superadmin_password_alone_sets_no_session_cookie(client: AsyncCli
 
 
 @pytest.mark.asyncio
-async def test_admin_login_without_enforcement_opens_a_session(
+async def test_default_settings_let_admin_password_login_open_a_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ):
-    """With enforcement off (non-production) the password still suffices."""
-    monkeypatch.setattr(settings, "ADMIN_MFA_REQUIRED", False)
+    """With the flag at its default, the password alone reaches admin routes."""
+    default = Settings.model_fields["ADMIN_MFA_REQUIRED"].default
+    monkeypatch.setattr(settings, "ADMIN_MFA_REQUIRED", default)
     await create_admin(client, "admin@test.com")
 
     response = await post_login(client, "admin@test.com")
 
+    assert response.status_code == 200
     assert response.json()["user"]["email"] == "admin@test.com"
+    assert "mfa_required" not in response.json()
+    assert "access_token" in client.cookies
+    assert "refresh_token" in client.cookies
+    assert "mfa_token" not in client.cookies
     assert (await client.get("/admin/users")).status_code == 200
+    # The dormant MFA routes stay shut: no login issues a challenge token.
+    dormant = await client.post("/auth/mfa/verify", json={"code": "123456"})
+    assert dormant.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -362,24 +370,34 @@ async def test_enable_fails_when_the_secret_was_replaced(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_confirm_failure_while_storing_keeps_mfa_disabled(client: AsyncClient):
-    """Confirmation that breaks part-way never enables MFA without codes."""
+    """A failure after the enable UPDATE is not persisted by the failure audit."""
     await create_admin(client, "admin@test.com")
     await post_login(client, "admin@test.com")
     started = await client.post("/auth/mfa/enroll/start")
     secret = started.json()["secret"]
 
+    # ``delete`` runs inside the real ``enable_mfa``, right after its UPDATE.
     with patch(
-        "app.services.mfa_service.enable_mfa",
-        new=AsyncMock(side_effect=RuntimeError("store failure")),
+        "app.repositories.user_mfa.delete",
+        side_effect=RuntimeError("store failure"),
     ):
-        # The route's failure audit may raise in its turn; either way it is a 500.
-        with pytest.raises((RuntimeError, IntegrityError)):
+        with pytest.raises(RuntimeError, match="store failure"):
             await client.post(
                 "/auth/mfa/enroll/confirm", json={"code": totp_code(secret)}
             )
 
     assert (await mfa_row("admin@test.com")).enabled_at is None
     assert "access_token" not in client.cookies
+    rows = [
+        r
+        for r in await audit_rows()
+        if r.details.get("endpoint") == "/mfa/enroll/confirm"
+    ]
+    assert len(rows) == 1
+    assert rows[0].user_id is None
+    assert rows[0].status == ActivityStatus.FAILURE
+    assert rows[0].details["error"] == "RuntimeError"
+    assert "store failure" not in json.dumps(rows[0].details)
 
 
 @pytest.mark.asyncio

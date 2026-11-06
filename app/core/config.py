@@ -45,11 +45,12 @@ class Settings(BaseSettings):
     LOGIN_FAILED_ATTEMPT_WINDOW_SECONDS: int = 15 * 60
     LOGIN_LOCKOUT_SECONDS: int = 15 * 60
 
-    # Admin MFA (TOTP). Fernet key used to encrypt TOTP secrets at rest; generate
-    # one with ``python -c "from cryptography.fernet import Fernet;
+    # Admin MFA (TOTP), off by default. Fernet key used to encrypt TOTP secrets at
+    # rest; generate one with ``python -c "from cryptography.fernet import Fernet;
     # print(Fernet.generate_key().decode())"``. Required outside ENVIRONMENT=
-    # "local", where a key is derived from SECRET_KEY when unset.
-    ADMIN_MFA_REQUIRED: bool = True
+    # "local" when ADMIN_MFA_REQUIRED is True; locally a key is derived from
+    # SECRET_KEY when unset.
+    ADMIN_MFA_REQUIRED: bool = False
     MFA_ENCRYPTION_KEY: str | None = None
     MFA_CHALLENGE_MINUTES: int = 5
     STEP_UP_TTL_SECONDS: int = 300
@@ -218,14 +219,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_mfa_settings(self) -> Self:
-        """Validate MFA flags and make sure a valid Fernet key is available."""
-        if self.ADMIN_MFA_REQUIRED is False and self.ENVIRONMENT == "production":
-            raise ValueError("ADMIN_MFA_REQUIRED cannot be disabled in production.")
+        """Make sure a valid Fernet key is available whenever MFA may need one."""
         if not self.MFA_ENCRYPTION_KEY:
             if self.ENVIRONMENT != "local":
+                if not self.ADMIN_MFA_REQUIRED:
+                    return self
                 raise ValueError(
                     "MFA_ENCRYPTION_KEY must be set for "
-                    f"ENVIRONMENT={self.ENVIRONMENT!r}."
+                    f"ENVIRONMENT={self.ENVIRONMENT!r} when ADMIN_MFA_REQUIRED "
+                    "is True."
                 )
             digest = hashlib.sha256(self.SECRET_KEY.encode()).digest()
             self.MFA_ENCRYPTION_KEY = base64.urlsafe_b64encode(digest).decode()
