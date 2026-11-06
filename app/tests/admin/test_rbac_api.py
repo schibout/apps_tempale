@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import replace
 from datetime import datetime, timedelta
 from itertools import batched
 from unittest.mock import AsyncMock, patch
@@ -10,6 +11,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import select, update
+from sqlalchemy.dialects import postgresql
 
 from app.core.config import settings
 from app.core.messages.error_message import ErrorMessages
@@ -24,6 +26,11 @@ from app.models.rbac import (
 )
 from app.models.user import User
 from app.models.user_activity import UserActivity
+from app.repositories.admin.permission import get_user_permissions
+from app.repositories.rbac import (
+    lock_permission_set_statement,
+    lock_role_statement,
+)
 from app.schemas.admin_permission import Permission
 from app.schemas.user import SystemRole
 from app.schemas.user_activity import ResourceType
@@ -110,6 +117,13 @@ async def _set_id(key: str) -> str:
     async with TestingSessionLocal() as session:
         stmt = select(RbacPermissionSet.id).where(RbacPermissionSet.key == key)
         return str((await session.execute(stmt)).scalar_one())
+
+
+async def _role_row(key: str) -> RbacRole:
+    """Return a role row from its key."""
+    async with TestingSessionLocal() as session:
+        stmt = select(RbacRole).where(RbacRole.key == key)
+        return (await session.execute(stmt)).scalars().one()
 
 
 async def _tier(user_id: uuid.UUID) -> str:
@@ -999,23 +1013,25 @@ async def test_delegate_with_admins_write_promotes(make_client: MakeClient):
 
 
 @pytest.mark.asyncio
-async def test_last_active_admin_keeps_its_tier(
+async def test_last_active_admin_cannot_lose_its_last_access(
     root: AsyncClient, make_client: MakeClient
 ):
-    """Withdrawing everything from the only active admin leaves its tier alone."""
+    """Withdrawing everything from the only active admin is refused, rows intact."""
     await make_client("target@test.com")
     target = uuid.UUID(await get_user_id("target@test.com"))
     await _store_role_assignment(target, "support_agent")
 
-    response = await root.put(
-        f"/admin/users/{target}/roles",
-        json=await _assignments(DEFAULT_USER_ROLE_KEY),
+    _assert_refused(
+        await root.put(
+            f"/admin/users/{target}/roles",
+            json=await _assignments(DEFAULT_USER_ROLE_KEY),
+        ),
+        400,
+        ErrorMessages.ADMIN_CANNOT_DEMOTE_LAST_ADMIN,
     )
 
-    assert response.status_code == 200, response.text
-    assert response.json()["account_role"] == "admin"
     assert await _tier(target) == SystemRole.ADMIN.value
-    assert await _role_keys(target) == {DEFAULT_USER_ROLE_KEY}
+    assert await _role_keys(target) == {DEFAULT_USER_ROLE_KEY, "support_agent"}
 
 
 @pytest.mark.asyncio
@@ -1090,13 +1106,15 @@ async def test_demotion_keeps_user_audience_assignments(
 
 
 @pytest.mark.asyncio
-async def test_admin_without_admin_access_is_not_demoted(
+async def test_edit_repairs_an_admin_without_admin_access(
     root: AsyncClient, make_client: MakeClient
 ):
-    """An admin holding nothing loses nothing, so an edit leaves its tier alone."""
+    """An admin left with no access returns to ``user`` on the next edit."""
     await make_client("other-admin@test.com")
     await make_client("target@test.com")
     target = uuid.UUID(await get_user_id("target@test.com"))
+    await _store_set_assignment(target, "users.read", utc_now() - timedelta(days=1))
+    assert await _tier(target) == SystemRole.ADMIN.value
 
     response = await root.put(
         f"/admin/users/{target}/roles",
@@ -1104,7 +1122,208 @@ async def test_admin_without_admin_access_is_not_demoted(
     )
 
     assert response.status_code == 200, response.text
+    assert await _tier(target) == SystemRole.USER.value
+    assert await _set_keys(target) == set()
+
+
+@pytest.mark.asyncio
+async def test_edit_of_a_keyless_last_admin_is_refused(
+    root: AsyncClient, make_client: MakeClient
+):
+    """A keyless last admin stays until an edit gives it access."""
+    await make_client("target@test.com")
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    url = f"/admin/users/{target}/roles"
+
+    _assert_refused(
+        await root.put(url, json=await _assignments(DEFAULT_USER_ROLE_KEY)),
+        400,
+        ErrorMessages.ADMIN_CANNOT_DEMOTE_LAST_ADMIN,
+    )
+    granted = await root.put(
+        url, json=await _assignments(DEFAULT_USER_ROLE_KEY, "auditor")
+    )
+    assert granted.status_code == 200, granted.text
     assert await _tier(target) == SystemRole.ADMIN.value
+
+
+@pytest.mark.asyncio
+async def test_direct_grant_editor_demotes_on_the_last_grant(
+    root: AsyncClient, make_client: MakeClient
+):
+    """Emptying the editor on an admin holding nothing else closes its panel."""
+    await make_client("other-admin@test.com")
+    admin = await make_client("target@test.com", permissions=[Permission.USERS_READ])
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    assert (await admin.get("/admin/users")).status_code == 200
+
+    response = await root.patch(
+        f"/admin/admins/{target}/permissions", json={"permissions": []}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["admin"]["role"] == SystemRole.USER.value
+    assert await _tier(target) == SystemRole.USER.value
+    assert await _role_keys(target) == {DEFAULT_USER_ROLE_KEY}
+    assert (await admin.get("/admin/users")).status_code == 403
+    audit = await _last_audit(ResourceType.USER)
+    assert audit.details["account_role"] == SystemRole.USER.value
+
+
+@pytest.mark.asyncio
+async def test_direct_grant_editor_keeps_an_admin_with_a_role(
+    root: AsyncClient, make_client: MakeClient
+):
+    """Emptying the editor leaves the tier while an admin role remains."""
+    await make_client("other-admin@test.com")
+    await make_client("target@test.com", permissions=[Permission.USERS_READ])
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    await _store_role_assignment(target, "auditor")
+
+    response = await root.patch(
+        f"/admin/admins/{target}/permissions", json={"permissions": []}
+    )
+
+    assert response.status_code == 200, response.text
+    assert await _tier(target) == SystemRole.ADMIN.value
+
+
+@pytest.mark.asyncio
+async def test_direct_grant_editor_refuses_for_the_last_admin(
+    root: AsyncClient, make_client: MakeClient
+):
+    """Emptying the editor on the only active admin is refused, grants intact."""
+    await make_client("target@test.com", permissions=[Permission.USERS_READ])
+    target = uuid.UUID(await get_user_id("target@test.com"))
+
+    _assert_refused(
+        await root.patch(
+            f"/admin/admins/{target}/permissions", json={"permissions": []}
+        ),
+        400,
+        ErrorMessages.ADMIN_CANNOT_DEMOTE_LAST_ADMIN,
+    )
+
+    assert await _tier(target) == SystemRole.ADMIN.value
+    async with TestingSessionLocal() as session:
+        assert await get_user_permissions(session, target) == [Permission.USERS_READ]
+
+
+@pytest.mark.asyncio
+async def test_lapsed_assignment_alone_does_not_move_the_tier(
+    root: AsyncClient, make_client: MakeClient
+):
+    """Reading an admin whose assignment lapsed leaves it an admin with no key."""
+    await make_client("other-admin@test.com")
+    admin = await make_client("target@test.com")
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    await _store_set_assignment(target, "users.read", utc_now() - timedelta(days=1))
+
+    assert (await admin.get("/admin/users")).status_code == 403
+    assert (await root.get(f"/admin/users/{target}/access")).status_code == 200
+    assert await _tier(target) == SystemRole.ADMIN.value
+
+
+# --- Promotion strip ----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_promotion_does_not_revive_a_lingering_grant(
+    root: AsyncClient, make_client: MakeClient
+):
+    """A direct grant left on a user dies with the promotion, not after it."""
+    assert (await root.post(ROLES, json=_role_payload())).status_code == 201
+    target_client = await make_client(
+        "target@test.com", SystemRole.USER, permissions=[Permission.ADMINS_DELETE]
+    )
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    actor = await make_client(
+        "actor@test.com",
+        permissions=[Permission.USERS_WRITE, Permission.ADMINS_WRITE],
+    )
+
+    response = await actor.put(
+        f"/admin/users/{target}/roles",
+        json=await _assignments(DEFAULT_USER_ROLE_KEY, "custom_role"),
+    )
+
+    assert response.status_code == 200, response.text
+    me = (await target_client.get("/users/me")).json()
+    assert me["role"] == SystemRole.ADMIN.value
+    assert "admins:delete" not in me["permissions"]
+    async with TestingSessionLocal() as session:
+        assert await get_user_permissions(session, target) == []
+    audit = await _last_audit(ResourceType.USER)
+    assert audit.details["stripped_on_promotion"]["direct_permissions"] == [
+        "admins:delete"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_promotion_checks_the_keys_of_a_resent_admin_row(
+    make_client: MakeClient,
+):
+    """Resending a live admin row on a user counts as granting it, as it wakes it."""
+    target_client = await make_client("target@test.com", SystemRole.USER)
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    await _store_set_assignment(target, "users.read")
+    actor = await make_client(
+        "actor@test.com",
+        permissions=[Permission.USERS_WRITE, Permission.ADMINS_WRITE],
+    )
+
+    _assert_refused(
+        await actor.put(
+            f"/admin/users/{target}/permission-sets",
+            json={"assignments": [_entry(await _set_id("users.read"))]},
+        ),
+        403,
+        ErrorMessages.RBAC_PRIVILEGE_ESCALATION,
+    )
+
+    assert await _tier(target) == SystemRole.USER.value
+    assert (await target_client.get("/admin/users")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_promotion_strips_lingering_rows_of_the_other_kind(
+    root: AsyncClient, make_client: MakeClient
+):
+    """A lingering admin set does not wake when a role promotes the account."""
+    assert (await root.post(ROLES, json=_role_payload())).status_code == 201
+    target_client = await make_client("target@test.com", SystemRole.USER)
+    target = uuid.UUID(await get_user_id("target@test.com"))
+    await _store_set_assignment(target, "users.read")
+    await _store_set_assignment(target, "self.readonly")
+    actor = await make_client(
+        "actor@test.com",
+        permissions=[Permission.USERS_WRITE, Permission.ADMINS_WRITE],
+    )
+
+    response = await actor.put(
+        f"/admin/users/{target}/roles",
+        json=await _assignments(DEFAULT_USER_ROLE_KEY, "custom_role"),
+    )
+
+    assert response.status_code == 200, response.text
+    assert await _set_keys(target) == {"self.readonly"}
+    assert (await target_client.get("/admin/users")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_expired_admin_row_does_not_promote(root: AsyncClient):
+    """Resending an expired admin row on a user leaves its tier alone."""
+    target = await _account("target@test.com")
+    end = utc_now() - timedelta(days=1)
+    await _store_set_assignment(target, "users.read", end)
+
+    response = await root.put(
+        f"/admin/users/{target}/permission-sets",
+        json={"assignments": [_entry(await _set_id("users.read"), end)]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert await _tier(target) == SystemRole.USER.value
 
 
 # --- Assignment payload -------------------------------------------------------
@@ -1160,6 +1379,7 @@ async def test_expired_row_may_be_resent_or_dropped_without_its_keys(
     target = uuid.UUID(await get_user_id("target@test.com"))
     end = utc_now() - timedelta(days=1)
     await _store_set_assignment(target, "users.read", end)
+    await _store_role_assignment(target, "auditor")
     url = f"/admin/users/{target}/permission-sets"
     set_id = await _set_id("users.read")
 
@@ -1178,7 +1398,10 @@ async def test_expired_row_may_be_resent_or_dropped_without_its_keys(
 @pytest.mark.asyncio
 async def test_access_names_the_source_of_each_key(make_client: MakeClient):
     """``access`` lists assignments and the origin of each effective key."""
-    reader = await make_client("reader@test.com", permissions=[Permission.USERS_READ])
+    reader = await make_client(
+        "reader@test.com",
+        permissions=[Permission.USERS_READ, Permission.ADMINS_READ],
+    )
     await make_client("target@test.com", permissions=[Permission.USERS_READ])
     target = uuid.UUID(await get_user_id("target@test.com"))
     await _store_role_assignment(target, "support_agent")
@@ -1231,12 +1454,36 @@ async def test_access_of_a_superadmin_shows_every_key(
     """A superadmin holds every key through its tier."""
     await make_client("other@test.com", SystemRole.SUPERADMIN)
     target = await get_user_id("other@test.com")
+    delegate = await make_client(
+        "delegate@test.com",
+        permissions=[Permission.USERS_READ, Permission.ADMINS_READ],
+    )
 
-    body = (await root.get(f"/admin/users/{target}/access")).json()
+    for http in (root, delegate):
+        response = await http.get(f"/admin/users/{target}/access")
+        assert response.status_code == 200, response.text
+        effective = {
+            row["permission"]: row["sources"] for row in response.json()["effective"]
+        }
+        assert set(effective) == {permission.value for permission in Permission}
+        assert {"kind": "superadmin", "key": "superadmin"} in effective["roles:write"]
 
-    effective = {row["permission"]: row["sources"] for row in body["effective"]}
-    assert set(effective) == {permission.value for permission in Permission}
-    assert {"kind": "superadmin", "key": "superadmin"} in effective["roles:write"]
+
+@pytest.mark.asyncio
+async def test_access_of_an_admin_needs_admins_read(make_client: MakeClient):
+    """``users:read`` alone opens plain users, not admin or superadmin accounts."""
+    reader = await make_client("reader@test.com", permissions=[Permission.USERS_READ])
+    await make_client("admin@test.com")
+    await make_client("super@test.com", SystemRole.SUPERADMIN)
+    plain = await _account("plain@test.com")
+
+    assert (await reader.get(f"/admin/users/{plain}/access")).status_code == 200
+    for email in ("admin@test.com", "super@test.com", "reader@test.com"):
+        _assert_refused(
+            await reader.get(f"/admin/users/{await get_user_id(email)}/access"),
+            403,
+            ErrorMessages.INSUFFICIENT_PERMISSIONS,
+        )
 
 
 # --- Rule 9: audit, invalidation, publication ---------------------------------
@@ -1509,3 +1756,138 @@ async def test_set_edit_invalidates_after_commit(root: AsyncClient):
     assert response.status_code == 200, response.text
     assert seen["keys"] == ["stats:read"]
     assert seen["after"]["permissions"] == ["stats:read"]
+
+
+# --- Locks and races ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("loader", "model"),
+    [
+        (lock_role_statement, RbacRole),
+        (lock_permission_set_statement, RbacPermissionSet),
+    ],
+)
+def test_element_lock_reads_fresh_rows_for_update(loader, model):
+    """The element lock asks PostgreSQL for the row, past the identity map."""
+    stmt = loader(uuid.uuid4())
+
+    assert "FOR UPDATE" in str(stmt.compile(dialect=postgresql.dialect()))
+    assert stmt.get_execution_options()["populate_existing"] is True
+    assert stmt.column_descriptions[0]["entity"] is model
+
+
+@pytest.mark.asyncio
+async def test_element_edits_and_deletes_take_the_lock(root: AsyncClient):
+    """Update and delete read the element through its lock, before its content."""
+    item = (await root.post(SETS, json=_set_payload())).json()
+    role = (await root.post(ROLES, json=_role_payload())).json()
+    calls: list[str] = []
+    real_set_lock = rbac_service.lock_permission_set
+    real_role_lock = rbac_service.lock_role
+    real_items = rbac_service.get_permissions_by_set
+    real_sets = rbac_service.get_sets_by_role
+
+    async def _set_lock(session, set_id):
+        """Record the lock."""
+        calls.append("lock")
+        return await real_set_lock(session, set_id)
+
+    async def _role_lock(session, role_id):
+        """Record the lock."""
+        calls.append("lock")
+        return await real_role_lock(session, role_id)
+
+    async def _items(session, ids):
+        """Record the content read."""
+        calls.append("read")
+        return await real_items(session, ids)
+
+    async def _sets(session, ids):
+        """Record the content read."""
+        calls.append("read")
+        return await real_sets(session, ids)
+
+    with (
+        patch.object(rbac_service, "lock_permission_set", _set_lock),
+        patch.object(rbac_service, "lock_role", _role_lock),
+        patch.object(rbac_service, "get_permissions_by_set", _items),
+        patch.object(rbac_service, "get_sets_by_role", _sets),
+    ):
+        for method, url, json in (
+            ("PATCH", f"{SETS}/{item['id']}", {"name": "Renamed"}),
+            ("PATCH", f"{ROLES}/{role['id']}", {"name": "Renamed"}),
+            ("DELETE", f"{ROLES}/{role['id']}", None),
+            ("DELETE", f"{SETS}/{item['id']}", None),
+        ):
+            calls.clear()
+            response = await root.request(method, url, json=json)
+            assert response.status_code == 200, response.text
+            assert calls[0] == "lock", (method, url, calls)
+
+
+def _vanished_set(audience: str = "admin") -> RbacPermissionSet:
+    """Build a set a concurrent delete has already removed from the database."""
+    return RbacPermissionSet(
+        id=uuid.uuid4(), key="gone", name="Gone", audience=audience
+    )
+
+
+@pytest.mark.asyncio
+async def test_role_creation_reports_a_set_deleted_meanwhile(root: AsyncClient):
+    """A set vanishing after its check gives the 404, not a key conflict."""
+    gone = _vanished_set()
+
+    with patch.object(rbac_service, "_load_role_sets", AsyncMock(return_value=[gone])):
+        response = await root.post(
+            ROLES, json=_role_payload(permission_set_ids=[str(gone.id)])
+        )
+
+    _assert_refused(response, 404, ErrorMessages.RBAC_PERMISSION_SET_NOT_FOUND)
+
+
+@pytest.mark.asyncio
+async def test_role_edit_reports_a_set_deleted_meanwhile(root: AsyncClient):
+    """A set vanishing after its check gives the 404, not a server error."""
+    role = (await root.post(ROLES, json=_role_payload())).json()
+    gone = _vanished_set()
+
+    with patch.object(rbac_service, "_load_role_sets", AsyncMock(return_value=[gone])):
+        response = await root.patch(
+            f"{ROLES}/{role['id']}", json={"permission_set_ids": [str(gone.id)]}
+        )
+
+    _assert_refused(response, 404, ErrorMessages.RBAC_PERMISSION_SET_NOT_FOUND)
+
+
+@pytest.mark.asyncio
+async def test_assignment_reports_a_set_deleted_meanwhile(root: AsyncClient):
+    """A set vanishing before the assignment is written gives the 404."""
+    target = await _account("target@test.com")
+    gone = _vanished_set(audience="user")
+    kind = replace(rbac_service._SETS, load=AsyncMock(return_value=[gone]))
+
+    with patch.object(rbac_service, "_SETS", kind):
+        response = await root.put(
+            f"/admin/users/{target}/permission-sets",
+            json={"assignments": [_entry(str(gone.id))]},
+        )
+
+    _assert_refused(response, 404, ErrorMessages.RBAC_PERMISSION_SET_NOT_FOUND)
+
+
+@pytest.mark.asyncio
+async def test_assignment_reports_a_role_deleted_meanwhile(root: AsyncClient):
+    """A role vanishing before the assignment is written gives the 404."""
+    target = await _account("target@test.com")
+    kept = await _role_row(DEFAULT_USER_ROLE_KEY)
+    gone = RbacRole(id=uuid.uuid4(), key="gone", name="Gone", audience="user")
+    kind = replace(rbac_service._ROLES, load=AsyncMock(return_value=[kept, gone]))
+
+    with patch.object(rbac_service, "_ROLES", kind):
+        response = await root.put(
+            f"/admin/users/{target}/roles",
+            json={"assignments": [_entry(str(kept.id)), _entry(str(gone.id))]},
+        )
+
+    _assert_refused(response, 404, ErrorMessages.RBAC_ROLE_NOT_FOUND)

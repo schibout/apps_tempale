@@ -21,8 +21,10 @@ from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
 from app.models.rbac import RbacPermissionSet, RbacRole
 from app.models.user import User
-from app.repositories.admin.permission import get_user_permissions
-from app.repositories.admin.user import is_last_active_admin
+from app.repositories.admin.permission import (
+    get_user_permissions,
+    stage_user_permissions,
+)
 from app.repositories.rbac import (
     create_permission_set,
     create_role,
@@ -40,12 +42,13 @@ from app.repositories.rbac import (
     get_roles_by_ids,
     get_set_assignments,
     get_sets_by_role,
-    has_admin_access,
     is_permission_set_in_use,
     is_role_in_use,
     list_permission_sets,
     list_roles,
     lock_account,
+    lock_permission_set,
+    lock_role,
     replace_permission_set_items,
     replace_role_assignments,
     replace_role_sets,
@@ -82,6 +85,7 @@ from app.schemas.user import SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.permissions import (
+    demote_if_no_admin_access,
     ensure_can_act_on_admin,
     ensure_can_grant,
     guard_superadmin_target,
@@ -178,6 +182,14 @@ async def _load_set(session: AsyncSession, set_id: uuid.UUID) -> RbacPermissionS
     return row
 
 
+async def _lock_set(session: AsyncSession, set_id: uuid.UUID) -> RbacPermissionSet:
+    """Return a permission set locked for this transaction or raise 404."""
+    row = await lock_permission_set(session, set_id)
+    if row is None:
+        _raise(status.HTTP_404_NOT_FOUND, ErrorMessages.RBAC_PERMISSION_SET_NOT_FOUND)
+    return row
+
+
 def _ensure_keys_fit_audience(
     audience: RbacAudience, permissions: Iterable[Permission]
 ) -> None:
@@ -259,7 +271,7 @@ async def update_permission_set_service(
     payload: PermissionSetUpdate,
 ) -> PermissionSetResponse:
     """Edit a custom set; any key gained or lost must be one the actor can grant."""
-    row = await _load_set(session, set_id)
+    row = await _lock_set(session, set_id)
     _ensure_editable(row)
 
     fields = payload.model_dump(exclude_unset=True, exclude={"permissions"})
@@ -298,7 +310,7 @@ async def delete_permission_set_service(
     set_id: uuid.UUID,
 ) -> Message:
     """Delete a custom set nothing uses any more."""
-    row = await _load_set(session, set_id)
+    row = await _lock_set(session, set_id)
     _ensure_editable(row)
     if await is_permission_set_in_use(session, row.id):
         _raise(status.HTTP_409_CONFLICT, ErrorMessages.RBAC_PERMISSION_SET_IN_USE)
@@ -357,6 +369,14 @@ def _role_snapshot(key: str, sets: Iterable[RbacPermissionSet]) -> JsonValue:
 async def _load_role(session: AsyncSession, role_id: uuid.UUID) -> RbacRole:
     """Return a role or raise 404."""
     row = await get_role(session, role_id)
+    if row is None:
+        _raise(status.HTTP_404_NOT_FOUND, ErrorMessages.RBAC_ROLE_NOT_FOUND)
+    return row
+
+
+async def _lock_role(session: AsyncSession, role_id: uuid.UUID) -> RbacRole:
+    """Return a role locked for this transaction or raise 404."""
+    row = await lock_role(session, role_id)
     if row is None:
         _raise(status.HTTP_404_NOT_FOUND, ErrorMessages.RBAC_ROLE_NOT_FOUND)
     return row
@@ -422,10 +442,16 @@ async def create_role_service(
         audience=payload.audience.value,
         is_system=False,
     )
+    set_ids = [item.id for item in sets]
     try:
-        await create_role(session, row, [item.id for item in sets])
+        await create_role(session, row, set_ids)
     except IntegrityError:
         await session.rollback()
+        # Either the key is taken or a set was deleted since it was checked.
+        if len(await get_permission_sets_by_ids(session, set_ids)) != len(set_ids):
+            _raise(
+                status.HTTP_404_NOT_FOUND, ErrorMessages.RBAC_PERMISSION_SET_NOT_FOUND
+            )
         _raise(status.HTTP_409_CONFLICT, ErrorMessages.RBAC_KEY_ALREADY_EXISTS)
 
     await log_activity(
@@ -453,7 +479,7 @@ async def update_role_service(
     payload: RoleUpdate,
 ) -> RoleResponse:
     """Edit a custom role; any key gained or lost must be one the actor can grant."""
-    row = await _load_role(session, role_id)
+    row = await _lock_role(session, role_id)
     _ensure_editable(row)
 
     fields = payload.model_dump(exclude_unset=True, exclude={"permission_set_ids"})
@@ -467,7 +493,14 @@ async def update_role_service(
             session, after
         )
         await ensure_can_grant(session, current_user, changed)
-        await replace_role_sets(session, row.id, [item.id for item in after])
+        try:
+            await replace_role_sets(session, row.id, [item.id for item in after])
+        except IntegrityError:
+            # A set was deleted since it was checked.
+            await session.rollback()
+            _raise(
+                status.HTTP_404_NOT_FOUND, ErrorMessages.RBAC_PERMISSION_SET_NOT_FOUND
+            )
     await update_element_fields(session, row, fields, utc_now())
 
     await log_activity(
@@ -496,7 +529,7 @@ async def delete_role_service(
     role_id: uuid.UUID,
 ) -> Message:
     """Delete a custom role no account holds any more."""
-    row = await _load_role(session, role_id)
+    row = await _lock_role(session, role_id)
     _ensure_editable(row)
     if await is_role_in_use(session, row.id):
         _raise(status.HTTP_409_CONFLICT, ErrorMessages.RBAC_ROLE_IN_USE)
@@ -599,12 +632,20 @@ async def _build_access(session: AsyncSession, target: User) -> UserAccessRespon
 
 
 async def get_user_access_service(
-    session: AsyncSession, user_id: uuid.UUID
+    session: AsyncSession, current_user: User, user_id: uuid.UUID
 ) -> UserAccessResponse:
-    """Return an account's assignments, direct grants and effective keys."""
+    """Return an account's assignments, direct grants and effective keys.
+
+    ``users:read`` opens plain users only: what an admin-tier account holds stays
+    behind ``admins:read``, including for the account's own page.
+    """
     target = await get_user_by_id(session, user_id)
     if target is None:
         _raise(status.HTTP_404_NOT_FOUND, ErrorMessages.USER_NOT_FOUND)
+    if target.role != SystemRole.USER.value and not await user_has_permission_uncached(
+        session, current_user, Permission.ADMINS_READ
+    ):
+        _raise(status.HTTP_403_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS)
     return await _build_access(session, target)
 
 
@@ -688,6 +729,28 @@ def _assignment_snapshot(
     }
 
 
+async def _strip_for_promotion(session: AsyncSession, user_id: uuid.UUID) -> JsonValue:
+    """Remove what a plain user may still have stored and return it, by key.
+
+    The tier gate is all that keeps such rows inactive, so a promotion would wake
+    them without anyone having granted them. Runs in the caller's transaction.
+    """
+    direct = await get_user_permissions(session, user_id)
+    roles = await get_role_assignments(session, user_id)
+    sets = await get_set_assignments(session, user_id)
+    await stage_user_permissions(session, user_id, [], user_id)
+    await delete_admin_audience_assignments(session, user_id)
+    return {
+        "direct_permissions": sorted(permission.value for permission in direct),
+        "roles": [
+            row.key for row, _ in roles if row.audience != RbacAudience.USER.value
+        ],
+        "permission_sets": [
+            row.key for row, _ in sets if row.audience != RbacAudience.USER.value
+        ],
+    }
+
+
 async def _load_target(session: AsyncSession, actor: User, user_id: uuid.UUID) -> User:
     """Return the locked account whose access an actor may change, or refuse."""
     target = await lock_account(session, user_id)
@@ -743,33 +806,39 @@ async def _replace_assignments(
         _raise(status.HTTP_400_BAD_REQUEST, ErrorMessages.RBAC_USER_ROLE_REQUIRED)
 
     promotes = target.role == SystemRole.USER.value and any(
-        element.audience != RbacAudience.USER.value for element in elements
+        element.audience != RbacAudience.USER.value
+        and not _is_expired(wanted[element.id], now)
+        for element in elements
     )
     if promotes and not await user_has_permission_uncached(
         session, actor, Permission.ADMINS_WRITE
     ):
         _raise(status.HTTP_403_FORBIDDEN, ErrorMessages.RBAC_ADMIN_ASSIGNMENT_FORBIDDEN)
 
-    changed = _changed_elements(current, wanted, now)
+    # An admin row stored on a plain user gives nothing yet: the promotion is what
+    # would grant it, so resending it counts as new and dropping it withdraws nothing.
+    held = {
+        row.id: current[row.id]
+        for row, _ in before
+        if not promotes or row.audience == RbacAudience.USER.value
+    }
+    changed = _changed_elements(held, wanted, now)
     keys_by_element = await kind.keys(session, changed)
     await ensure_can_grant(session, actor, set().union(*keys_by_element.values()))
 
     tier_before = target.role
-    had_admin_access = await has_admin_access(session, target.id, now)
-    await kind.replace(session, target.id, wanted, actor.id)
+    stripped = await _strip_for_promotion(session, target.id) if promotes else None
+    try:
+        await kind.replace(session, target.id, wanted, actor.id)
+    except IntegrityError:
+        # An element was deleted since it was checked.
+        await session.rollback()
+        _raise(status.HTTP_404_NOT_FOUND, kind.not_found)
 
     if promotes:
         await set_account_tier(session, target, SystemRole.ADMIN)
-    elif (
-        target.role == SystemRole.ADMIN.value
-        and had_admin_access
-        and not await has_admin_access(session, target.id, now)
-        and not await is_last_active_admin(session, target.id)
-    ):
-        # As the promote and demote strip: a lapsed admin assignment must not
-        # come back if the account is promoted again.
-        await delete_admin_audience_assignments(session, target.id)
-        await set_account_tier(session, target, SystemRole.USER)
+    else:
+        await demote_if_no_admin_access(session, target, now)
 
     after = await kind.read(session, target.id)
     await log_activity(
@@ -782,6 +851,7 @@ async def _replace_assignments(
             "action": kind.action,
             "before": _assignment_snapshot(tier_before, before),
             "after": _assignment_snapshot(target.role, after),
+            **({"stripped_on_promotion": stripped} if promotes else {}),
         },
         request=request,
     )

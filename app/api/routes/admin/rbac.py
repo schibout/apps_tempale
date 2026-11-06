@@ -199,10 +199,10 @@ async def delete_role_endpoint(
 
 @router.get("/users/{user_id}/access", response_model=UserAccessResponse)
 async def get_user_access_endpoint(
-    user_id: uuid.UUID, _admin: UsersRead, session: SessionDep
+    user_id: uuid.UUID, current_user: UsersRead, session: SessionDep
 ) -> UserAccessResponse:
     """Return an account's assignments, direct grants and effective keys."""
-    return await get_user_access_service(session, user_id)
+    return await get_user_access_service(session, current_user, user_id)
 
 
 @router.put("/users/{user_id}/roles", response_model=UserAccessResponse)

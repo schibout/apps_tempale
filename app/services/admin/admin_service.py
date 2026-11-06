@@ -13,13 +13,14 @@ from app.repositories.admin.permission import (
     get_permissions_for_users,
     get_user_permissions,
     set_user_permissions,
+    stage_user_permissions,
 )
 from app.repositories.admin.user import (
     is_last_active_admin,
     list_admins,
     transfer_root_superadmin,
 )
-from app.repositories.rbac import delete_admin_audience_assignments
+from app.repositories.rbac import delete_admin_audience_assignments, lock_account
 from app.repositories.root_transfer import (
     delete_root_transfer_otp,
     store_root_transfer_otp,
@@ -50,11 +51,13 @@ from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.notify import notify
 from app.use_cases.permissions import (
+    demote_if_no_admin_access,
     ensure_can_grant,
     guard_superadmin_target,
     invalidate_user_permissions,
     signal_permissions_changed,
 )
+from app.utils import utc_now
 from app.utils.email_templates import generate_root_transfer_otp_email
 
 _ROOT_TRANSFER_OTP_TTL_SECONDS = 180
@@ -324,8 +327,10 @@ async def update_admin_permissions_service(
     A delegated caller can only change keys it holds: keys the target keeps are
     not a grant, while adding or withdrawing one needs the key. Its own account is
     refused, since rewriting it could turn a temporary key into a permanent grant.
+    An account left with no admin access returns to ``user``; the last active admin
+    is refused. The change commits with its audit row.
     """
-    target = await get_user_by_id(session, user_id)
+    target = await lock_account(session, user_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -347,8 +352,10 @@ async def update_admin_permissions_service(
     current = set(await get_user_permissions(session, target.id))
     await ensure_can_grant(session, current_user, current ^ set(payload.permissions))
 
-    await set_user_permissions(session, target.id, payload.permissions, current_user.id)
-    await invalidate_user_permissions(target.id)
+    await stage_user_permissions(
+        session, target.id, payload.permissions, current_user.id
+    )
+    await demote_if_no_admin_access(session, target, utc_now())
     permissions = list(dict.fromkeys(payload.permissions))
 
     await log_activity(
@@ -360,9 +367,11 @@ async def update_admin_permissions_service(
         details={
             "action": "set_admin_permissions",
             "permissions": [permission.value for permission in permissions],
+            "account_role": target.role,
         },
         request=request,
     )
+    await invalidate_user_permissions(target.id)
     await _notify_permissions_changed(
         session, target.id, action="set_admin_permissions"
     )
@@ -381,8 +390,7 @@ async def delete_admin_service(
 ) -> Message:
     """Hard-delete an admin account (grants cascade at the DB level).
 
-    Removing admin access is a deletion, not a demotion: there is no longer an
-    admin→user downgrade path. Superadmins are never deleted here — they must be
+    Superadmins are never deleted here — they must be
     demoted to admin first (root only), which keeps the superadmin tier guarded.
     A delegated caller is told so explicitly and cannot remove its own account.
     """

@@ -730,12 +730,16 @@ async def test_admin_socket_closes_when_support_read_is_revoked(
 ):
     """Withdrawing ``support:read`` through the API closes the open socket."""
     target_id = await _seed_target(
-        superadmin_client, "loses-support@test.com", [Permission.SUPPORT_READ]
+        superadmin_client,
+        "loses-support@test.com",
+        [Permission.SUPPORT_READ, Permission.STATS_READ],
     )
     socket = await _open_admin_socket("loses-support@test.com")
 
+    # A key stays: this is the only admin, whose last access cannot be withdrawn.
     response = await superadmin_client.patch(
-        f"/admin/admins/{target_id}/permissions", json={"permissions": []}
+        f"/admin/admins/{target_id}/permissions",
+        json={"permissions": [Permission.STATS_READ.value]},
     )
     assert response.status_code == 200, response.text
 

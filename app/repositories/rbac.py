@@ -324,6 +324,44 @@ async def get_role(session: AsyncSession, role_id: uuid.UUID) -> RbacRole | None
     return await session.get(RbacRole, role_id)
 
 
+def lock_permission_set_statement(set_id: uuid.UUID) -> Select:
+    """Select a permission set for update, past what the session already loaded."""
+    return (
+        select(RbacPermissionSet)
+        .where(RbacPermissionSet.id == set_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def lock_role_statement(role_id: uuid.UUID) -> Select:
+    """Select a role for update, past what the session already loaded."""
+    return (
+        select(RbacRole)
+        .where(RbacRole.id == role_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def lock_permission_set(
+    session: AsyncSession, set_id: uuid.UUID
+) -> RbacPermissionSet | None:
+    """Return a permission set locked for this transaction, freshly read.
+
+    Concurrent edits of one set queue here, so each replaces what the previous one
+    committed and its audit row records the true ``before``.
+    """
+    stmt = lock_permission_set_statement(set_id)
+    return (await session.execute(stmt)).scalars().first()
+
+
+async def lock_role(session: AsyncSession, role_id: uuid.UUID) -> RbacRole | None:
+    """Return a role locked for this transaction, freshly read, as for a set."""
+    stmt = lock_role_statement(role_id)
+    return (await session.execute(stmt)).scalars().first()
+
+
 async def get_permission_sets_by_ids(
     session: AsyncSession, set_ids: Iterable[uuid.UUID]
 ) -> list[RbacPermissionSet]:

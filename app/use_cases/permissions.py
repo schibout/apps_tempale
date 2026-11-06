@@ -24,10 +24,14 @@ from app.core.realtime import account_topic, publish_safe
 from app.core.redis import get_redis
 from app.models.user import User
 from app.repositories.admin.permission import get_user_permissions
+from app.repositories.admin.user import is_last_active_admin
 from app.repositories.rbac import (
+    delete_admin_audience_assignments,
     get_assigned_permissions,
     get_next_assignment_expiry,
     get_permanent_assigned_permissions,
+    has_admin_access,
+    set_account_tier,
 )
 from app.schemas.account import AccountEvent, AccountEventType
 from app.schemas.admin_permission import Permission, is_self_permission
@@ -265,6 +269,31 @@ async def ensure_can_act_on_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ErrorMessages.INSUFFICIENT_PERMISSIONS,
         )
+
+
+async def demote_if_no_admin_access(
+    session: AsyncSession, target: User, now: datetime
+) -> None:
+    """Return an admin left without admin access to ``user``, or refuse.
+
+    Called after a change is staged, in its transaction, so the verdict reads the
+    state the change leaves: an edit also repairs an admin stuck without keys since
+    its assignments lapsed. The last active admin is refused and the change undone.
+    Lapsed admin rows go too, as in the promote and demote strip, so they cannot
+    come back with a later promotion.
+    """
+    if target.role != SystemRole.ADMIN.value:
+        return
+    if await has_admin_access(session, target.id, now):
+        return
+    if await is_last_active_admin(session, target.id):
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorMessages.ADMIN_CANNOT_DEMOTE_LAST_ADMIN,
+        )
+    await delete_admin_audience_assignments(session, target.id)
+    await set_account_tier(session, target, SystemRole.USER)
 
 
 async def signal_permissions_changed(user_id: uuid.UUID) -> None:

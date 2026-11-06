@@ -41,13 +41,13 @@ async def get_permissions_for_users(
     return result
 
 
-async def set_user_permissions(
+async def stage_user_permissions(
     session: AsyncSession,
     user_id: uuid.UUID,
     permissions: list[Permission],
     granted_by: uuid.UUID,
 ) -> None:
-    """Replace a user's permission grants with exactly ``permissions``.
+    """Replace a user's grants with exactly ``permissions``, without committing.
 
     Existing rows are cleared first so the call is idempotent and also serves as
     a full revoke when ``permissions`` is empty (e.g. on demotion). Duplicates
@@ -64,4 +64,15 @@ async def set_user_permissions(
                 granted_by=granted_by,
             )
         )
+    await session.flush()
+
+
+async def set_user_permissions(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    permissions: list[Permission],
+    granted_by: uuid.UUID,
+) -> None:
+    """Replace a user's grants with exactly ``permissions`` and commit."""
+    await stage_user_permissions(session, user_id, permissions, granted_by)
     await session.commit()

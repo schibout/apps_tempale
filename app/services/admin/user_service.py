@@ -154,11 +154,11 @@ async def update_user_admin_service(
 
     update_data = payload.model_dump(exclude_unset=True)
 
-    # Role is intentionally not editable here: there is no user→admin or
-    # admin→user transition any more. Admins are provisioned as accounts and
-    # removed by deletion; the superadmin tier is managed only on the admins
-    # surface (root-only promote/demote). ``AdminUserUpdate`` carries no role
-    # field, so nothing to handle.
+    # Role is intentionally not editable here: user→admin and admin→user follow
+    # role, set and grant changes (``rbac_service``, ``admin_service``); the
+    # superadmin tier is managed only on the admins surface (root-only
+    # promote/demote). ``AdminUserUpdate`` carries no role field, so nothing to
+    # handle.
 
     if "is_active" in update_data and update_data["is_active"] != target.is_active:
         _guard_not_self(
