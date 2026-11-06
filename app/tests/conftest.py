@@ -14,6 +14,7 @@ from app.api.deps import get_db
 from app.core import redis as redis_module
 from app.core.db import Base
 from app.main import app
+from app.repositories.rbac import ensure_rbac_catalog
 
 # Use an in-memory SQLite database for testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -49,9 +50,11 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def create_test_database():
-    """Create a fresh database for each test."""
+    """Create a fresh database, with its RBAC catalog, for each test."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with TestingSessionLocal() as session:
+        await ensure_rbac_catalog(session)
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

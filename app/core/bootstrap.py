@@ -1,4 +1,4 @@
-"""Startup data bootstrap: guarantees the system always has a superadmin."""
+"""Startup data bootstrap: system RBAC catalog and first superadmin."""
 
 import logging
 
@@ -13,6 +13,7 @@ from app.repositories.admin.user import (
     root_superadmin_exists,
     superadmin_exists,
 )
+from app.repositories.rbac import ensure_rbac_catalog
 from app.repositories.user import create_user, get_user_by_email, update_user
 from app.schemas.user import SystemRole
 
@@ -32,6 +33,12 @@ async def _ensure_root_designated(session: AsyncSession) -> None:
     if earliest is not None:
         await update_user(session, earliest, {"is_root_superadmin": True})
         logger.info("Designated %s as root superadmin", earliest.email)
+
+
+async def ensure_system_rbac_catalog() -> None:
+    """Create or restore the system permission sets and roles from the code."""
+    async with AsyncSessionLocal() as session:
+        await ensure_rbac_catalog(session)
 
 
 async def ensure_first_superadmin() -> None:

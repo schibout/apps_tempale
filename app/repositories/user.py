@@ -6,6 +6,7 @@ from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.repositories.rbac import assign_default_role
 from app.repositories.user_activity import anonymize_user_activities
 from app.schemas.announcement import AnnouncementAudience
 from app.schemas.user import SystemRole
@@ -39,8 +40,10 @@ async def get_users_with_count(
 
 
 async def create_user(session: AsyncSession, user: User) -> User:
-    """Create a new user in the database."""
+    """Create a new user holding the default role, both in one transaction."""
     session.add(user)
+    await session.flush()
+    await assign_default_role(session, user.id)
     await session.commit()
     await session.refresh(user)
     return user

@@ -2,6 +2,14 @@ from app.models.admin_permission import AdminPermission
 from app.models.announcement import Announcement
 from app.models.file import File
 from app.models.notification import Notification
+from app.models.rbac import (
+    RbacPermissionSet,
+    RbacPermissionSetItem,
+    RbacRole,
+    RbacRolePermissionSet,
+    RbacUserPermissionSet,
+    RbacUserRole,
+)
 from app.models.support import (
     SupportMessage,
     SupportMessageAttachment,
@@ -18,6 +26,12 @@ __all__ = [
     "Announcement",
     "File",
     "Notification",
+    "RbacPermissionSet",
+    "RbacPermissionSetItem",
+    "RbacRole",
+    "RbacRolePermissionSet",
+    "RbacUserPermissionSet",
+    "RbacUserRole",
     "SupportMessage",
     "SupportMessageAttachment",
     "SupportTicket",
