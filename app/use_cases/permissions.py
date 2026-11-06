@@ -2,8 +2,10 @@
 
 Lives in ``use_cases/`` because the API guards, the ``/users/me`` payload and the
 admin services all need the same answer. The cache only ever holds what the
-database returned: a Redis failure or an unreadable entry falls back to the
-database, while a database failure propagates, so no failure can grant anything.
+database returned: a failed cache read or an unreadable entry falls back to the
+database, and a database failure propagates, so neither grants anything. One
+failure can keep access longer: a failed invalidation leaves a revoked key usable
+until its entry's TTL ends.
 """
 
 import json
@@ -29,13 +31,21 @@ from app.utils import utc_now
 logger = logging.getLogger(__name__)
 
 _VERSION_KEY = "rbac:version"
+# Must stay well above ``RBAC_CACHE_TTL_SECONDS``: a generation may only reset to
+# zero once every entry written under its earlier values has expired.
+_GENERATION_TTL_SECONDS = 60 * 60 * 24
 # RuntimeError is what ``get_redis`` raises while the client is not initialized.
 _REDIS_FAILURES = (RedisError, RuntimeError, OSError)
 
 
-def _cache_key(version: str | int, user_id: uuid.UUID) -> str:
-    """Build the Redis key of an account's permissions for a cache version."""
-    return f"perms:{version}:{user_id}"
+def _generation_key(user_id: uuid.UUID) -> str:
+    """Build the Redis key of an account's cache generation."""
+    return f"rbac:gen:{user_id}"
+
+
+def _cache_key(version: str | int, generation: str | int, user_id: uuid.UUID) -> str:
+    """Build the Redis key of an account's permissions for a version and generation."""
+    return f"perms:{version}:{generation}:{user_id}"
 
 
 def _decode_cached(raw: str | None) -> set[Permission] | None:
@@ -54,13 +64,13 @@ def _decode_cached(raw: str | None) -> set[Permission] | None:
 async def _read_cache(user_id: uuid.UUID) -> tuple[str | None, set[Permission] | None]:
     """Return the account's cache key and entry, or no key if Redis is unusable.
 
-    The version is read before the database is, so an entry computed while a
-    global invalidation happens lands under the old version and is never served.
+    The version and generation are read before the database is, so an entry
+    computed while an invalidation happens lands under a key nobody reads again.
     """
     try:
         redis = get_redis()
-        version = await redis.get(_VERSION_KEY) or 0
-        key = _cache_key(version, user_id)
+        version, generation = await redis.mget(_VERSION_KEY, _generation_key(user_id))
+        key = _cache_key(version or 0, generation or 0, user_id)
         return key, _decode_cached(await redis.get(key))
     except _REDIS_FAILURES as exc:
         logger.warning("Permission cache read failed: %s", exc)
@@ -128,15 +138,17 @@ async def get_effective_permissions(
 
 
 async def invalidate_user_permissions(user_id: uuid.UUID) -> None:
-    """Forget one account's cached permissions.
+    """Forget one account's cached permissions by moving to a new generation.
 
     A Redis failure is logged, not raised: the change it follows is already
     committed, and the stale entry dies with its TTL at the latest.
     """
+    key = _generation_key(user_id)
     try:
-        redis = get_redis()
-        version = await redis.get(_VERSION_KEY) or 0
-        await redis.delete(_cache_key(version, user_id))
+        async with get_redis().pipeline(transaction=True) as pipe:
+            pipe.incr(key)
+            pipe.expire(key, _GENERATION_TTL_SECONDS)
+            await pipe.execute()
     except _REDIS_FAILURES as exc:
         logger.error("Permission cache invalidation failed: %s", exc)
 

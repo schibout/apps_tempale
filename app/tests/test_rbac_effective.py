@@ -35,7 +35,7 @@ from app.models.rbac import (
     RbacUserRole,
 )
 from app.models.user import User
-from app.repositories.rbac import get_next_assignment_expiry
+from app.repositories.rbac import get_assigned_permissions, get_next_assignment_expiry
 from app.schemas.admin_permission import Permission
 from app.schemas.user import SystemRole
 from app.tests.admin.conftest import (
@@ -132,9 +132,34 @@ async def _has(user: User, permission: Permission) -> bool:
         return await user_has_permission(session, user, permission)
 
 
-def _cache_key(user: User, version: int = 0) -> str:
+def _cache_key(user: User, version: int = 0, generation: int = 0) -> str:
     """Build the expected cache key of an account."""
-    return f"perms:{version}:{user.id}"
+    return f"perms:{version}:{generation}:{user.id}"
+
+
+class _BrokenPipeline:
+    """A Redis pipeline that queues commands and fails when it runs them."""
+
+    def __init__(self, error: Exception) -> None:
+        """Remember the failure to raise."""
+        self._error = error
+
+    async def __aenter__(self) -> "_BrokenPipeline":
+        """Enter the pipeline context like a real client does."""
+        return self
+
+    async def __aexit__(self, *_exc_info: object) -> None:
+        """Leave the pipeline context without handling the failure."""
+
+    def incr(self, _key: str) -> None:
+        """Queue a command, as a real pipeline does without touching the network."""
+
+    def expire(self, _key: str, _seconds: int) -> None:
+        """Queue a command, as a real pipeline does without touching the network."""
+
+    async def execute(self) -> None:
+        """Fail when the queued commands reach the server."""
+        raise self._error
 
 
 class _BrokenRedis:
@@ -144,6 +169,11 @@ class _BrokenRedis:
         """Remember the failure to raise."""
         self._error = error
         self.calls = 0
+
+    def pipeline(self, **_options: object) -> _BrokenPipeline:
+        """Return a pipeline that fails on execution, as the real client's does."""
+        self.calls += 1
+        return _BrokenPipeline(self._error)
 
     def __getattr__(self, _name: str) -> AsyncMock:
         """Return a command that raises the configured failure."""
@@ -577,18 +607,65 @@ async def test_global_invalidation_bumps_the_version(fake_redis: FakeRedis):
     assert await fake_redis.get(_cache_key(user, 1)) == "[]"
 
 
-async def test_user_invalidation_after_a_version_bump_removes_the_current_entry(
+async def test_user_invalidation_after_a_version_bump_moves_to_a_new_generation(
     fake_redis: FakeRedis,
 ):
-    """Per-account invalidation deletes the key of the current version."""
+    """Per-account invalidation keeps the version and moves the generation."""
     user = await _make_user(SystemRole.ADMIN)
     await invalidate_all_permissions()
     await _effective(user)
-    assert await fake_redis.get(_cache_key(user, 1)) == "[]"
+    assert await fake_redis.get(_cache_key(user, 1, 0)) == "[]"
+
+    await invalidate_user_permissions(user.id)
+    await _grant(user, Permission.STATS_READ)
+
+    assert await _effective(user) == {Permission.STATS_READ}
+    assert await fake_redis.get(_cache_key(user, 1, 1)) == '["stats:read"]'
+
+
+async def test_generation_outlives_every_entry_and_then_expires(fake_redis: FakeRedis):
+    """The generation key lasts far beyond an entry, without staying forever."""
+    user = await _make_user(SystemRole.ADMIN)
 
     await invalidate_user_permissions(user.id)
 
-    assert await fake_redis.get(_cache_key(user, 1)) is None
+    generation_ttl = await fake_redis.ttl(f"rbac:gen:{user.id}")
+    assert settings.RBAC_CACHE_TTL_SECONDS * 10 < generation_ttl <= 86400
+
+
+async def test_revocation_during_a_cache_fill_is_not_overwritten(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A reader that read before a revocation cannot cache the revoked key."""
+    user = await _make_user(SystemRole.ADMIN)
+    await _assign_set(user, "users.read")
+
+    async def _revoke_after_reading(*args: object) -> set[Permission]:
+        """Return the old answer once the revocation committed behind the reader."""
+        monkeypatch.setattr(
+            "app.use_cases.permissions.get_assigned_permissions",
+            get_assigned_permissions,
+        )
+        old = await get_assigned_permissions(*args)
+        async with TestingSessionLocal() as session:
+            await session.execute(
+                delete(RbacUserPermissionSet).where(
+                    RbacUserPermissionSet.user_id == user.id
+                )
+            )
+            await session.commit()
+        await invalidate_user_permissions(user.id)
+        return old
+
+    monkeypatch.setattr(
+        "app.use_cases.permissions.get_assigned_permissions",
+        _revoke_after_reading,
+    )
+
+    assert await _effective(user) == {Permission.USERS_READ}
+
+    assert await _effective(user) == set()
+    assert not await _has(user, Permission.USERS_READ)
 
 
 async def test_set_added_to_a_role_shows_after_global_invalidation():
