@@ -50,7 +50,7 @@ def verify_totp(secret: str, code: str, last_used_step: int | None) -> int | Non
     not strictly greater than ``last_used_step`` is rejected, so a code cannot
     be replayed once its step has been recorded.
     """
-    if not code.isdigit():
+    if not (code.isascii() and code.isdigit()):
         return None
     totp = pyotp.TOTP(secret, interval=TOTP_INTERVAL_SECONDS)
     current = int(time.time() // TOTP_INTERVAL_SECONDS)
