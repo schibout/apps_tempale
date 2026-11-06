@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select, union
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,12 +16,18 @@ from app.models.rbac import (
     RbacPermissionSetItem,
     RbacRole,
     RbacRolePermissionSet,
+    RbacUserPermissionSet,
     RbacUserRole,
 )
+from app.schemas.admin_permission import Permission
 
 # A losing process only conflicts once per concurrent winner, and the winner's
 # committed rows are visible to the retry, so a few attempts are enough.
 _CATALOG_SYNC_ATTEMPTS = 3
+
+# Valid keys snapshot so an item left over from a removed enum member is skipped
+# rather than raising when materialised back into ``Permission``.
+_VALID_PERMISSIONS = {perm.value for perm in Permission}
 
 
 async def _sync_permission_sets(session: AsyncSession) -> dict[str, uuid.UUID]:
@@ -55,7 +62,7 @@ async def _sync_permission_sets(session: AsyncSession) -> dict[str, uuid.UUID]:
         for definition in SYSTEM_PERMISSION_SETS
         for permission in definition.permissions
     }
-    for set_id, permission in current - wanted:
+    for set_id, permission in sorted(current - wanted):
         await session.execute(
             delete(RbacPermissionSetItem).where(
                 RbacPermissionSetItem.set_id == set_id,
@@ -64,7 +71,7 @@ async def _sync_permission_sets(session: AsyncSession) -> dict[str, uuid.UUID]:
         )
     session.add_all(
         RbacPermissionSetItem(set_id=set_id, permission=permission)
-        for set_id, permission in wanted - current
+        for set_id, permission in sorted(wanted - current)
     )
     await session.flush()
     return ids
@@ -105,7 +112,7 @@ async def _sync_roles(session: AsyncSession, set_ids: dict[str, uuid.UUID]) -> N
         for definition in SYSTEM_ROLES
         for set_key in definition.set_keys
     }
-    for role_id, set_id in current - wanted:
+    for role_id, set_id in sorted(current - wanted):
         await session.execute(
             delete(RbacRolePermissionSet).where(
                 RbacRolePermissionSet.role_id == role_id,
@@ -114,7 +121,7 @@ async def _sync_roles(session: AsyncSession, set_ids: dict[str, uuid.UUID]) -> N
         )
     session.add_all(
         RbacRolePermissionSet(role_id=role_id, set_id=set_id)
-        for role_id, set_id in wanted - current
+        for role_id, set_id in sorted(wanted - current)
     )
     await session.flush()
 
@@ -157,3 +164,55 @@ async def assign_default_role(session: AsyncSession, user_id: uuid.UUID) -> None
         return
     session.add(RbacUserRole(user_id=user_id, role_id=DEFAULT_USER_ROLE_ID))
     await session.flush()
+
+
+async def get_assigned_permissions(
+    session: AsyncSession, user_id: uuid.UUID, now: datetime
+) -> set[Permission]:
+    """Return the keys an account holds through roles and sets valid at ``now``."""
+    through_roles = (
+        select(RbacPermissionSetItem.permission)
+        .join(
+            RbacRolePermissionSet,
+            RbacRolePermissionSet.set_id == RbacPermissionSetItem.set_id,
+        )
+        .join(RbacUserRole, RbacUserRole.role_id == RbacRolePermissionSet.role_id)
+        .where(
+            RbacUserRole.user_id == user_id,
+            or_(RbacUserRole.expires_at.is_(None), RbacUserRole.expires_at > now),
+        )
+    )
+    through_sets = (
+        select(RbacPermissionSetItem.permission)
+        .join(
+            RbacUserPermissionSet,
+            RbacUserPermissionSet.set_id == RbacPermissionSetItem.set_id,
+        )
+        .where(
+            RbacUserPermissionSet.user_id == user_id,
+            or_(
+                RbacUserPermissionSet.expires_at.is_(None),
+                RbacUserPermissionSet.expires_at > now,
+            ),
+        )
+    )
+    rows = await session.execute(union(through_roles, through_sets))
+    return {Permission(key) for key in rows.scalars() if key in _VALID_PERMISSIONS}
+
+
+async def get_next_assignment_expiry(
+    session: AsyncSession, user_id: uuid.UUID, now: datetime
+) -> datetime | None:
+    """Return when the account's next role or set assignment expires, if any."""
+    role_expiry = select(func.min(RbacUserRole.expires_at)).where(
+        RbacUserRole.user_id == user_id, RbacUserRole.expires_at > now
+    )
+    set_expiry = select(func.min(RbacUserPermissionSet.expires_at)).where(
+        RbacUserPermissionSet.user_id == user_id,
+        RbacUserPermissionSet.expires_at > now,
+    )
+    expiries = [
+        (await session.execute(role_expiry)).scalar_one_or_none(),
+        (await session.execute(set_expiry)).scalar_one_or_none(),
+    ]
+    return min((expiry for expiry in expiries if expiry is not None), default=None)

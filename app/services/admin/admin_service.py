@@ -49,6 +49,7 @@ from app.schemas.user import Language, SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.notify import notify
+from app.use_cases.permissions import invalidate_user_permissions
 from app.utils.email_templates import generate_root_transfer_otp_email
 
 _ROOT_TRANSFER_OTP_TTL_SECONDS = 180
@@ -212,6 +213,7 @@ async def promote_admin_to_superadmin_service(
 
     await set_user_permissions(session, target.id, [], current_user.id)
     await update_user(session, target, {"role": SystemRole.SUPERADMIN.value})
+    await invalidate_user_permissions(target.id)
 
     await log_activity(
         session=session,
@@ -269,6 +271,7 @@ async def demote_superadmin_service(
 
     await update_user(session, target, {"role": SystemRole.ADMIN.value})
     await set_user_permissions(session, target.id, [], current_user.id)
+    await invalidate_user_permissions(target.id)
 
     await log_activity(
         session=session,
@@ -316,6 +319,7 @@ async def update_admin_permissions_service(
         )
 
     await set_user_permissions(session, target.id, payload.permissions, current_user.id)
+    await invalidate_user_permissions(target.id)
     permissions = list(dict.fromkeys(payload.permissions))
 
     await log_activity(

@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.admin_permission import Permission
 from app.schemas.user import SystemRole
 from app.tests.conftest import TestingSessionLocal
+from app.use_cases.permissions import invalidate_user_permissions
 
 
 async def register_and_verify(
@@ -65,13 +66,18 @@ async def promote_to_superadmin(email: str, *, root: bool = False) -> None:
 
 
 async def grant_permissions(email: str, permissions: list[Permission]) -> None:
-    """Grant the given RBAC permissions to an (already-admin) user."""
+    """Grant the given RBAC permissions to an (already-admin) user.
+
+    Writes the rows directly, so it drops the cached entry itself, as the admin
+    service does after changing a grant.
+    """
     async with TestingSessionLocal() as session:
         result = await session.execute(select(User).where(User.email == email))
         user = result.scalars().one()
         for permission in permissions:
             session.add(AdminPermission(user_id=user.id, permission=permission.value))
         await session.commit()
+    await invalidate_user_permissions(user.id)
 
 
 async def grant_all_permissions(email: str) -> None:

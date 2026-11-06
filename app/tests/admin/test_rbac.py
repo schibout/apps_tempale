@@ -25,6 +25,17 @@ from app.tests.admin.conftest import (
 )
 from app.tests.conftest import TestingSessionLocal
 
+# What the default ``user`` role grants to any account created through the API.
+_DEFAULT_ROLE_KEYS = (
+    Permission.SELF_PROFILE_UPDATE,
+    Permission.SELF_FILES_UPLOAD,
+    Permission.SELF_NOTIFICATIONS_READ,
+    Permission.SELF_SUPPORT_READ,
+    Permission.SELF_SUPPORT_CREATE,
+    Permission.SELF_SUPPORT_REPLY,
+    Permission.SELF_SUPPORT_CLOSE,
+)
+
 
 async def _make_admin(
     client: AsyncClient, email: str, permissions: list[Permission]
@@ -135,20 +146,22 @@ async def test_plain_admin_cannot_reset_superadmin_password(client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_me_hides_permissions_for_regular_user(client: AsyncClient):
-    """A regular user never receives a permissions field."""
+async def test_me_lists_only_self_permissions_for_regular_user(client: AsyncClient):
+    """A regular user receives its self-service keys and no admin key."""
     await register_and_verify(client, "plain@test.com")
     await login(client, "plain@test.com")
     body = (await client.get("/users/me")).json()
-    assert "permissions" not in body
+    assert body["permissions"] == sorted(key.value for key in _DEFAULT_ROLE_KEYS)
 
 
 @pytest.mark.asyncio
 async def test_me_exposes_grants_for_admin(client: AsyncClient):
-    """A plain admin sees exactly their granted permissions."""
+    """A plain admin sees exactly their grants plus the default role's keys."""
     await _make_admin(client, "meadmin@test.com", [Permission.STATS_READ])
     body = (await client.get("/users/me")).json()
-    assert body["permissions"] == [Permission.STATS_READ.value]
+    assert body["permissions"] == sorted(
+        key.value for key in (Permission.STATS_READ, *_DEFAULT_ROLE_KEYS)
+    )
 
 
 @pytest.mark.asyncio

@@ -13,13 +13,13 @@ from app.core.messages.error_message import ErrorMessages
 from app.core.mfa import admin_mfa_required
 from app.core.security import decode_token_payload
 from app.models.user import User
-from app.repositories.admin.permission import has_permission
 from app.repositories.token_blacklist import is_token_blacklisted
 from app.repositories.user import get_user_by_id
 from app.repositories.user_session import is_session_revoked
 from app.schemas.admin_permission import Permission
 from app.schemas.token import TokenPayload
 from app.schemas.user import SystemRole
+from app.use_cases.permissions import user_has_permission
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False
@@ -282,33 +282,14 @@ async def resolve_optional_user(request: Request, db: AsyncSession) -> User | No
     return user
 
 
-async def user_has_permission(
-    session: AsyncSession, user: User, permission: Permission
-) -> bool:
-    """Return whether ``user`` may exercise ``permission`` (superadmin bypass).
-
-    The admin-role gate lives here so the answer is safe even if a non-admin
-    ever reaches it — a demoted account whose grant rows linger, or a caller
-    that skips ``CurrentAdminUser``. Superadmins always pass; plain admins must
-    hold the grant; anyone else is denied. This is the non-raising counterpart
-    to ``ensure_permission`` for callers that branch instead of aborting (e.g. a
-    WebSocket handshake that closes with a policy code).
-    """
-    if user.role == SystemRole.SUPERADMIN:
-        return True
-    if user.role != SystemRole.ADMIN:
-        return False
-    return await has_permission(session, user.id, permission)
-
-
 async def ensure_permission(
     session: AsyncSession, user: User, permission: Permission
 ) -> None:
-    """Raise 403 unless ``user`` is a superadmin or an admin holding the grant.
+    """Raise 403 unless ``user_has_permission`` accepts the account.
 
-    Shared by ``require_permission`` and the payload-aware authorization
-    dependencies in the admin routes, so the superadmin-bypass rule and the
-    grant lookup live in exactly one place.
+    Shared by the permission factories and the payload-aware authorization
+    dependencies in the admin routes, so the raising form of the check lives in
+    exactly one place.
     """
     if not await user_has_permission(session, user, permission):
         raise HTTPException(
@@ -321,8 +302,8 @@ def require_permission(permission: Permission) -> Callable[..., Awaitable[User]]
     """Build a dependency that enforces a single RBAC permission.
 
     The returned dependency inherits auth, active-account, and admin-role checks
-    from ``CurrentAdminUser``. Superadmins bypass the grant lookup; plain admins
-    must hold ``permission`` in ``admin_permission`` or receive a 403.
+    from ``CurrentAdminUser``. Superadmins bypass the lookup; plain admins must
+    hold ``permission`` among their effective permissions or receive a 403.
     """
 
     async def _require(admin: CurrentAdminUser, session: SessionDep) -> User:
@@ -330,6 +311,24 @@ def require_permission(permission: Permission) -> Callable[..., Awaitable[User]]
         await ensure_permission(session, admin, permission)
         return admin
 
+    _require.__rbac_permission__ = permission
+    return _require
+
+
+def require_user_permission(permission: Permission) -> Callable[..., Awaitable[User]]:
+    """Build a dependency enforcing a permission on any active account.
+
+    Same check as ``require_permission``, resolved from the active user so a
+    regular account can pass with a ``self.*`` key. It does not demand the admin
+    tier, so it does not carry the admin-only MFA check either.
+    """
+
+    async def _require(user: CurrentActiveUser, session: SessionDep) -> User:
+        """Enforce the captured permission for the resolved active user."""
+        await ensure_permission(session, user, permission)
+        return user
+
+    _require.__rbac_permission__ = permission
     return _require
 
 

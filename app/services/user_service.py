@@ -11,7 +11,6 @@ from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
 from app.core.security import aget_password_hash, averify_password
 from app.models.user import User
-from app.repositories.admin.permission import get_user_permissions
 from app.repositories.file import delete_file as delete_file_record
 from app.repositories.file import get_file
 from app.repositories.token_blacklist import add_token_to_blacklist
@@ -37,25 +36,25 @@ from app.schemas.user import (
 )
 from app.schemas.user_activity import ActivityStatus, ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
+from app.use_cases.permissions import get_usable_permissions
 from app.utils.email_templates import generate_account_deactivation_email
 
 logger = logging.getLogger(__name__)
 
 
 async def build_user_me_service(session: AsyncSession, user: User) -> UserMe:
-    """Assemble the ``/users/me`` payload, attaching RBAC permissions for admins.
+    """Assemble the ``/users/me`` payload, attaching the account's permissions.
 
-    Only plain admins carry a permission list. Superadmins bypass every check by
-    role alone, and normal users have none — so for both the field is omitted
-    from the response entirely.
+    Every account carries the keys it can actually use, except superadmins: they
+    bypass every check by role alone, so the field is omitted for them.
     """
     # Validate through UserPublic first: ``UserMe.model_validate(user)`` would
     # try to read the ORM ``permissions`` relationship (lazy + async) during
     # validation and raise MissingGreenlet. UserPublic has no such field, so it
-    # is safe; the permission list is then attached explicitly from the repo.
+    # is safe; the permission list is then attached explicitly.
     me = UserMe.model_validate(UserPublic.model_validate(user).model_dump())
-    if user.role == SystemRole.ADMIN.value:
-        me.permissions = await get_user_permissions(session, user.id)
+    if user.role != SystemRole.SUPERADMIN.value:
+        me.permissions = await get_usable_permissions(session, user)
     return me
 
 

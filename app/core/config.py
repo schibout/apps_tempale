@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     )
     DISPOSABLE_EMAIL_CACHE_TTL_SECONDS: int = 60 * 60 * 24
 
+    # Longest time an account's computed permissions stay cached in Redis.
+    RBAC_CACHE_TTL_SECONDS: int = 300
+
     # Account deactivation + grace-period deletion
     ACCOUNT_DELETION_GRACE_DAYS: int = 30
     DELETION_JOB_BATCH_SIZE: int = 100

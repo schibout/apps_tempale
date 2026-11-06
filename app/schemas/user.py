@@ -138,11 +138,11 @@ class UserPublic(UserBase):
 
 
 class UserMe(UserPublic):
-    """``/users/me`` payload: ``UserPublic`` plus RBAC permissions for admins.
+    """``/users/me`` payload: ``UserPublic`` plus the account's RBAC permissions.
 
-    ``permissions`` is filled only for admins (superadmins get every key). For
-    normal users it stays ``None`` and the serializer drops it entirely, so the
-    field never reaches the client rather than surfacing as ``null``.
+    ``permissions`` is filled for every account but superadmins, who hold every
+    key by role. For them it stays ``None`` and the serializer drops it entirely,
+    so the field never reaches the client rather than surfacing as ``null``.
     """
 
     permissions: list[Permission] | None = None
@@ -151,7 +151,7 @@ class UserMe(UserPublic):
     def _drop_null_permissions(
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, object]:
-        """Omit the ``permissions`` key entirely when it is None (non-admins)."""
+        """Omit the ``permissions`` key entirely when it is None (superadmins)."""
         data = handler(self)
         if self.permissions is None:
             data.pop("permissions", None)

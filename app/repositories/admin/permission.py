@@ -21,21 +21,6 @@ async def get_user_permissions(
     return [Permission(value) for value in rows if value in _VALID_PERMISSIONS]
 
 
-async def has_permission(
-    session: AsyncSession, user_id: uuid.UUID, permission: Permission
-) -> bool:
-    """Return True if the admin holds the given permission grant."""
-    stmt = (
-        select(AdminPermission.id)
-        .where(
-            AdminPermission.user_id == user_id,
-            AdminPermission.permission == permission.value,
-        )
-        .limit(1)
-    )
-    return (await session.execute(stmt)).first() is not None
-
-
 async def get_permissions_for_users(
     session: AsyncSession, user_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, list[Permission]]:
