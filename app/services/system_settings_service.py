@@ -15,6 +15,7 @@ from app.models.system_setting import SystemSetting
 from app.models.user import User
 from app.repositories.system_setting import (
     get_all_system_settings,
+    get_system_setting_by_key,
     upsert_system_setting,
 )
 from app.schemas.system_settings import (
@@ -110,6 +111,8 @@ async def update_setting_service(
                 detail=ErrorMessages.SETTING_INVALID_VALUE,
             ) from exc
 
+    previous = await get_system_setting_by_key(session, key)
+    before = coerce(definition, previous.value) if previous else definition.default
     row = await upsert_system_setting(
         session, key=key, value=to_str(payload.value), updated_by=admin.id
     )
@@ -119,6 +122,7 @@ async def update_setting_service(
         activity_type=ActivityType.UPDATE,
         resource_type=ResourceType.SYSTEM_SETTINGS,
         resource_id=row.id,
+        details={"key": key, "before": before, "after": payload.value},
         request=request,
     )
     return SettingUpdateResponse(

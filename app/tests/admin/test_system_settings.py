@@ -7,11 +7,15 @@ the maintenance gate (non-admins blocked with 503, admins and exempt paths pass)
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
+from app.core.settings_registry import SETTINGS_REGISTRY
+from app.models.user_activity import UserActivity
 from app.repositories.system_setting import upsert_system_setting
 from app.schemas.admin_permission import Permission
+from app.schemas.user_activity import ActivityType, ResourceType
 from app.tests.admin.conftest import (
     grant_permissions,
     login,
@@ -51,6 +55,44 @@ async def test_patch_setting_updates_value(admin_client: AsyncClient):
     body = response.json()
     assert body["setting"]["value"] is True
     assert body["message"] == SuccessMessages.SETTINGS_UPDATED
+
+
+@pytest.mark.asyncio
+async def test_update_setting_audits_before_and_after(admin_client: AsyncClient):
+    """Each update is audited with the previous and new value of the setting."""
+    for value in ("First name", "Second name"):
+        response = await admin_client.patch(
+            "/admin/system-settings/site_name", json={"value": value}
+        )
+        assert response.status_code == 200, response.text
+
+    async with TestingSessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(UserActivity)
+                    .where(
+                        UserActivity.resource_type
+                        == ResourceType.SYSTEM_SETTINGS.value,
+                        UserActivity.activity_type == ActivityType.UPDATE.value,
+                    )
+                    .order_by(UserActivity.created_at, UserActivity.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    by_after = {row.details["after"]: row.details for row in rows}
+    assert by_after["First name"] == {
+        "key": "site_name",
+        "before": SETTINGS_REGISTRY["site_name"].default,
+        "after": "First name",
+    }
+    assert by_after["Second name"] == {
+        "key": "site_name",
+        "before": "First name",
+        "after": "Second name",
+    }
 
 
 @pytest.mark.asyncio
