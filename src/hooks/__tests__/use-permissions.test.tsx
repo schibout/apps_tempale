@@ -2,8 +2,11 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  useCanDeleteAdmins,
   useCanDeleteUsers,
+  useCanReadAdmins,
   useCanReadUsers,
+  useCanWriteAdmins,
   useIsSuperadmin,
   usePermissions,
 } from "@/hooks/use-permissions";
@@ -70,6 +73,13 @@ describe("per-permission hooks", () => {
     expect(renderHook(() => useCanReadUsers()).result.current).toBe(true);
     expect(renderHook(() => useCanDeleteUsers()).result.current).toBe(false);
     expect(renderHook(() => useIsSuperadmin()).result.current).toBe(false);
+  });
+
+  it("gate the admin management keys one by one", () => {
+    useAuthStore.setState({ user: makeUser(SystemRole.ADMIN, [Permission.AdminsRead]) });
+    expect(renderHook(() => useCanReadAdmins()).result.current).toBe(true);
+    expect(renderHook(() => useCanWriteAdmins()).result.current).toBe(false);
+    expect(renderHook(() => useCanDeleteAdmins()).result.current).toBe(false);
   });
 
   it("are all true for a superadmin", () => {

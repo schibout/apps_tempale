@@ -36,7 +36,7 @@ export interface AdminNavCaps {
   canReadSupport: boolean;
   canReadBroadcasts: boolean;
   canReadSystemSettings: boolean;
-  isSuperadmin: boolean;
+  canReadAdmins: boolean;
 }
 
 export const buildAdminNav = (caps: AdminNavCaps): AdminNavSection[] => {
@@ -49,7 +49,7 @@ export const buildAdminNav = (caps: AdminNavCaps): AdminNavSection[] => {
       key: "management",
       items: [
         { key: "users", href: ROUTES.adminUsers, icon: Users, show: caps.canReadUsers },
-        { key: "admins", href: ROUTES.adminAdmins, icon: UserCog, show: caps.isSuperadmin },
+        { key: "admins", href: ROUTES.adminAdmins, icon: UserCog, show: caps.canReadAdmins },
         { key: "files", href: ROUTES.adminFiles, icon: Images, show: caps.canReadFiles },
         {
           key: "broadcasts",

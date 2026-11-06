@@ -1,7 +1,7 @@
 "use client";
 
-import { Dropdown, type MenuProps } from "antd";
-import { KeyRound, MoreHorizontal, ShieldMinus, ShieldPlus, Trash2 } from "lucide-react";
+import { Dropdown } from "antd";
+import { MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -20,95 +20,27 @@ import { formatDate } from "@/lib/format-date";
 import type { AdminListItem } from "@/lib/types/admin";
 import { SystemRole } from "@/lib/types/user";
 
-interface AdminsTableProps {
+import { buildRowMenu, type RowMenuActions } from "./admin-row-menu";
+
+interface AdminsTableProps extends RowMenuActions {
   rows: AdminListItem[];
   isLoading: boolean;
   // Whether the current viewer is the root superadmin — gates the
   // superadmin-tier actions (promote to superadmin, demote back to admin).
   isViewerRoot: boolean;
-  onManage: (admin: AdminListItem) => void;
-  onDelete: (admin: AdminListItem) => void;
-  onPromote: (admin: AdminListItem) => void;
-  onDemoteSuperadmin: (admin: AdminListItem) => void;
+  // admins:write and admins:delete: gate the actions on plain admin rows.
+  canWrite: boolean;
+  canDelete: boolean;
+  viewerId: string | undefined;
 }
-
-interface RowMenuArgs {
-  admin: AdminListItem;
-  isViewerRoot: boolean;
-  t: (key: string) => string;
-  onManage: AdminsTableProps["onManage"];
-  onDelete: AdminsTableProps["onDelete"];
-  onPromote: AdminsTableProps["onPromote"];
-  onDemoteSuperadmin: AdminsTableProps["onDemoteSuperadmin"];
-}
-
-// Build only the actions the viewer may perform on this row. The root
-// superadmin row gets no menu at all — its role only changes via root transfer.
-const buildRowMenu = ({
-  admin,
-  isViewerRoot,
-  t,
-  onManage,
-  onDelete,
-  onPromote,
-  onDemoteSuperadmin,
-}: RowMenuArgs): MenuProps["items"] => {
-  if (admin.role === SystemRole.SUPERADMIN) {
-    if (!isViewerRoot || admin.is_root_superadmin) return [];
-    return [
-      {
-        key: "demote",
-        icon: <ShieldMinus className="h-4 w-4" />,
-        label: t("admins.demoteToAdmin.action"),
-        onClick: () => {
-          onDemoteSuperadmin(admin);
-        },
-      },
-    ];
-  }
-
-  const items: NonNullable<MenuProps["items"]> = [
-    {
-      key: "manage-permissions",
-      icon: <KeyRound className="h-4 w-4" />,
-      label: t("admins.managePermissions"),
-      onClick: () => {
-        onManage(admin);
-      },
-    },
-  ];
-
-  if (isViewerRoot) {
-    items.push({
-      key: "promote",
-      icon: <ShieldPlus className="h-4 w-4" />,
-      label: t("admins.promoteSuperadmin.action"),
-      onClick: () => {
-        onPromote(admin);
-      },
-    });
-  }
-
-  items.push(
-    { type: "divider" },
-    {
-      key: "delete",
-      icon: <Trash2 className="h-4 w-4" />,
-      label: t("admins.delete.action"),
-      danger: true,
-      onClick: () => {
-        onDelete(admin);
-      },
-    },
-  );
-
-  return items;
-};
 
 export function AdminsTable({
   rows,
   isLoading,
   isViewerRoot,
+  canWrite,
+  canDelete,
+  viewerId,
   onManage,
   onDelete,
   onPromote,
@@ -132,6 +64,9 @@ export function AdminsTable({
           const menuItems = buildRowMenu({
             admin,
             isViewerRoot,
+            canWrite,
+            canDelete,
+            viewerId,
             t,
             onManage,
             onDelete,

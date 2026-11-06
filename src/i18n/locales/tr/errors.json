@@ -52,6 +52,9 @@
       "cannot_transfer_to_self": "Root yetkisini kendinize devredemezsiniz.",
       "superadmin_role_immutable": "Bir superadmin'in rolü değiştirilemez."
     },
+    "rbac": {
+      "privilege_escalation": "Sahip olmadığınız bir yetkiyi veremez veya geri alamazsınız."
+    },
     "notification": {
       "not_found": "Bildirim bulunamadı.",
       "access_denied": "Bu bildirime erişiminiz yok."

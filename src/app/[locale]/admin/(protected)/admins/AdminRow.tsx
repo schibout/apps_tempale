@@ -12,6 +12,10 @@ interface AdminRowProps {
   // Whether the current viewer is the root superadmin — gates the superadmin-tier
   // actions (promote an admin to superadmin, demote a superadmin to admin).
   isViewerRoot: boolean;
+  // admins:write and admins:delete: gate the actions on a plain admin.
+  canWrite: boolean;
+  canDelete: boolean;
+  viewerId: string | undefined;
   onManage: (admin: AdminListItem) => void;
   onDelete: (admin: AdminListItem) => void;
   onPromote: (admin: AdminListItem) => void;
@@ -21,6 +25,9 @@ interface AdminRowProps {
 export function AdminRow({
   admin,
   isViewerRoot,
+  canWrite,
+  canDelete,
+  viewerId,
   onManage,
   onDelete,
   onPromote,
@@ -29,6 +36,7 @@ export function AdminRow({
   const { t } = useTranslation("admin");
   const fullName = [admin.first_name, admin.last_name].filter(Boolean).join(" ");
   const isSuperadmin = admin.role === SystemRole.SUPERADMIN;
+  const isSelf = admin.id === viewerId;
 
   return (
     <Card>
@@ -65,15 +73,17 @@ export function AdminRow({
             <span className="text-xs text-muted-foreground">
               {t("admins.permissionCount", { count: admin.permissions.length })}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                onManage(admin);
-              }}
-            >
-              {t("admins.managePermissions")}
-            </Button>
+            {canWrite && !isSelf ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onManage(admin);
+                }}
+              >
+                {t("admins.managePermissions")}
+              </Button>
+            ) : null}
             {isViewerRoot ? (
               <Button
                 variant="outline"
@@ -85,15 +95,17 @@ export function AdminRow({
                 {t("admins.promoteSuperadmin.action")}
               </Button>
             ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                onDelete(admin);
-              }}
-            >
-              {t("admins.delete.action")}
-            </Button>
+            {canDelete && !isSelf ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onDelete(admin);
+                }}
+              >
+                {t("admins.delete.action")}
+              </Button>
+            ) : null}
           </div>
         )}
       </CardContent>

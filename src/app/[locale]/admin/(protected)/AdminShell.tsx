@@ -11,12 +11,12 @@ import { Button } from "@/components/ui/button";
 import { useAccountEvents } from "@/hooks/use-account-events";
 import {
   useCanReadActivities,
+  useCanReadAdmins,
   useCanReadBroadcasts,
   useCanReadFiles,
   useCanReadSupport,
   useCanReadSystemSettings,
   useCanReadUsers,
-  useIsSuperadmin,
 } from "@/hooks/use-permissions";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import {
@@ -58,7 +58,7 @@ export function AdminShell({ children }: AdminShellProps) {
   const canReadSupport = useCanReadSupport();
   const canReadBroadcasts = useCanReadBroadcasts();
   const canReadSystemSettings = useCanReadSystemSettings();
-  const isSuperadmin = useIsSuperadmin();
+  const canReadAdmins = useCanReadAdmins();
   const currentLocale = getLocaleFromPath(pathname);
   const pathWithoutLocale = getPathWithoutLocale(pathname);
 
@@ -111,7 +111,7 @@ export function AdminShell({ children }: AdminShellProps) {
     canReadSupport,
     canReadBroadcasts,
     canReadSystemSettings,
-    isSuperadmin,
+    canReadAdmins,
   });
 
   const closeOnMobile = () => {

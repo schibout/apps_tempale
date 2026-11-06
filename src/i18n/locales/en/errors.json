@@ -52,6 +52,9 @@
       "cannot_transfer_to_self": "You cannot transfer root status to yourself.",
       "superadmin_role_immutable": "A superadmin's role cannot be changed."
     },
+    "rbac": {
+      "privilege_escalation": "You cannot grant or withdraw a permission you do not hold."
+    },
     "notification": {
       "not_found": "Notification not found.",
       "access_denied": "You don't have access to this notification."

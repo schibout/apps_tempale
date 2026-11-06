@@ -9,9 +9,16 @@ import { DEFAULT_PAGE_SIZE } from "@/components/admin/shared/pagination-config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAdmins, usePermissionCatalog } from "@/hooks/api/use-admin";
-import { useIsRootSuperadmin, useIsSuperadmin } from "@/hooks/use-permissions";
+import {
+  useCanDeleteAdmins,
+  useCanReadAdmins,
+  useCanWriteAdmins,
+  useIsRootSuperadmin,
+  usePermissions,
+} from "@/hooks/use-permissions";
 import type { AdminListItem } from "@/lib/types/admin";
 import { SystemRole } from "@/lib/types/user";
+import { useAuthStore } from "@/stores/auth.store";
 
 import { AdminForbidden } from "../AdminForbidden";
 import { AdminActionConfirm, type AdminActionState } from "./AdminActionConfirm";
@@ -26,8 +33,12 @@ const TRANSFER_TARGETS_LIMIT = 200;
 
 export function AdminsContent() {
   const { t } = useTranslation("admin");
-  const isSuperadmin = useIsSuperadmin();
+  const { has } = usePermissions();
+  const canRead = useCanReadAdmins();
+  const canWrite = useCanWriteAdmins();
+  const canDelete = useCanDeleteAdmins();
   const isRoot = useIsRootSuperadmin();
+  const viewerId = useAuthStore((state) => state.user?.id);
 
   const [skip, setSkip] = useState(0);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
@@ -36,16 +47,18 @@ export function AdminsContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
-  const adminsQuery = useAdmins({ skip, limit: pageSize }, isSuperadmin);
-  const catalogQuery = usePermissionCatalog(isSuperadmin);
+  const adminsQuery = useAdmins({ skip, limit: pageSize }, canRead);
+  const catalogQuery = usePermissionCatalog(canRead);
   const superadminsQuery = useAdmins(
     { role: SystemRole.SUPERADMIN, limit: TRANSFER_TARGETS_LIMIT },
-    isSuperadmin && isRoot,
+    isRoot,
   );
 
-  if (!isSuperadmin) return <AdminForbidden />;
+  if (!canRead) return <AdminForbidden />;
 
-  const catalog = catalogQuery.data?.permissions ?? [];
+  // A viewer only hands out or withdraws keys it holds, so the grids offer only
+  // those. An edited admin's other keys stay in the modal's state and are resent.
+  const catalog = (catalogQuery.data?.permissions ?? []).filter(has);
   const data = adminsQuery.data;
   const isLoading = adminsQuery.isLoading || catalogQuery.isLoading;
   // If the current page falls out of range (e.g. the last admin on the last
@@ -77,13 +90,15 @@ export function AdminsContent() {
               {t("admins.transferRoot.action")}
             </Button>
           ) : null}
-          <Button
-            onClick={() => {
-              setCreateOpen(true);
-            }}
-          >
-            {t("admins.create.action")}
-          </Button>
+          {canWrite ? (
+            <Button
+              onClick={() => {
+                setCreateOpen(true);
+              }}
+            >
+              {t("admins.create.action")}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -93,6 +108,9 @@ export function AdminsContent() {
             rows={data?.data ?? []}
             isLoading={isLoading && !data}
             isViewerRoot={isRoot}
+            canWrite={canWrite}
+            canDelete={canDelete}
+            viewerId={viewerId}
             onManage={setEditing}
             onDelete={(target) => {
               setAction({ kind: "delete", admin: target });

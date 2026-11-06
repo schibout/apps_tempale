@@ -177,7 +177,7 @@ export const useRevokeAdminUserSessions = () => {
   });
 };
 
-// --- Admin / RBAC management (superadmin only) -----------------------------
+// --- Admin / RBAC management (admins:* keys) --------------------------------
 
 export const useAdmins = (params?: AdminListParams, enabled = true) =>
   useQuery({

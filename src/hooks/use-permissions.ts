@@ -71,3 +71,7 @@ export const useCanReadSystemSettings = (): boolean =>
   usePermissions().has(Permission.SystemSettingsRead);
 export const useCanWriteSystemSettings = (): boolean =>
   usePermissions().has(Permission.SystemSettingsWrite);
+
+export const useCanReadAdmins = (): boolean => usePermissions().has(Permission.AdminsRead);
+export const useCanWriteAdmins = (): boolean => usePermissions().has(Permission.AdminsWrite);
+export const useCanDeleteAdmins = (): boolean => usePermissions().has(Permission.AdminsDelete);
