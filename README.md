@@ -131,6 +131,11 @@ CLOUDINARY_UPLOAD_FOLDER="uploads"
 # Max upload size in bytes (default 5 MB). Uploads above this are rejected.
 MAX_UPLOAD_SIZE_BYTES=5242880
 
+# Admin MFA (TOTP) is dormant by default; see "Audit Retention & Admin MFA".
+ADMIN_MFA_REQUIRED=false
+# Fernet key encrypting TOTP secrets. Required outside ENVIRONMENT="local" once MFA is enabled.
+MFA_ENCRYPTION_KEY=
+
 # Sentry (only initialized when ENVIRONMENT != "local")
 SENTRY_DSN=
 ```
@@ -440,6 +445,37 @@ Per-device login sessions backed by the `user_session` table, so a user can see 
 **Instant revocation.** Revoking a session blacklists its tokens **and** writes a `revoked:session:{sid}` Redis flag (TTL = access-token lifetime), which `get_current_user` checks on every request — so a still-valid access token dies the moment its session is killed, without a per-request DB hit. The same paths broadcast `sessions_revoked` on the `account:{id}` topic so a kicked device's open tab drops to login live. Logout, password change (revokes **all** of the user's sessions), and admin termination all flow through here.
 
 **Housekeeping.** A nightly arq cron (`app/worker/jobs/purge_stale_sessions.py`) deletes expired rows immediately and revoked rows after a retention window (`SESSION_REVOKED_RETENTION_DAYS`, default 30) in one set-based `DELETE`.
+
+---
+
+## 🧾 Audit Retention & Admin MFA
+
+### Audit trail retention
+
+`user_activity.user_id` is nullable with `ON DELETE SET NULL`: deleting an account **keeps** its audit rows instead of cascading. Each kept row carries `actor_ref` (a pseudonymous reference to the former actor) and `user_deleted_at` (when the account disappeared); failed logins for an unknown email are stored with no user at all. A nightly arq cron (`app/worker/jobs/purge_anonymized_activities.py`) deletes these anonymized rows once they are older than `ANONYMIZED_AUDIT_RETENTION_DAYS` (default `365`), at `AUDIT_PURGE_CRON_HOUR` / `AUDIT_PURGE_CRON_MINUTE` (default 05:00). Revoked or expired sessions follow their own window (`SESSION_REVOKED_RETENTION_DAYS`, default `30`).
+
+### Admin MFA (TOTP): dormant
+
+The backend support for TOTP is in place but **off by default** (`ADMIN_MFA_REQUIRED=false`): nothing changes for admins until it is enabled. Two tables back it: `user_mfa` (encrypted TOTP secret, activation date, last accepted time step) and `user_mfa_recovery_code` (hashed single-use recovery codes). Both cascade when the user is deleted.
+
+To enable it:
+
+```env
+ADMIN_MFA_REQUIRED=true
+MFA_ENCRYPTION_KEY=<Fernet key>
+```
+
+Generate the key with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. `MFA_ENCRYPTION_KEY` is required whenever `ENVIRONMENT` is not `local` and MFA is enabled (the app refuses to start without a valid Fernet key); locally a key is derived from `SECRET_KEY` when unset. Keep the key stable: losing or changing it makes every stored TOTP secret unreadable.
+
+> **Warning:** the frontend enrollment and verification screens and the step-up check do **not exist yet**. Enabling `ADMIN_MFA_REQUIRED` today therefore blocks admin sign-in through the UI. Leave it `false` until those screens ship.
+
+**Last-resort reset.** Every account except the root superadmin is reset from the admin panel. If the root superadmin loses their authenticator and recovery codes, run from a server shell:
+
+```bash
+python -m app.cli.reset_mfa <email>
+```
+
+The command refuses any account that is not the root superadmin, clears its MFA enrollment, revokes its sessions and writes an audit entry.
 
 ---
 
