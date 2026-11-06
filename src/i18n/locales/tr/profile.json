@@ -58,6 +58,8 @@
   },
   "avatar": {
     "title": "Profil Fotoğrafı",
-    "description": "Hesabını kişiselleştirmek için bir fotoğraf yükle"
-  }
+    "description": "Hesabını kişiselleştirmek için bir fotoğraf yükle",
+    "uploadRestricted": "Dosya yükleme izniniz olmadığı için fotoğraf değiştirilemez."
+  },
+  "restricted": "Profilinizi düzenleme izniniz yok."
 }

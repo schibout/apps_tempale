@@ -6,9 +6,11 @@ import { Form, Input, Modal } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 
+import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { FileUpload, type FileUploadHandle } from "@/components/common/file-upload";
 import { Button } from "@/components/ui/button";
 import { useCreateTicket } from "@/hooks/api/use-support";
+import { useCanUploadOwnFiles } from "@/hooks/use-permissions";
 import { getLocaleFromPath, getLocalizedPath, ROUTES } from "@/lib/config/routes";
 import { FILE_CATEGORY } from "@/lib/types/file";
 import { zodFieldRule } from "@/lib/validation/zodToAntdRule";
@@ -23,6 +25,8 @@ export function NewTicketModal({ open, onOpenChange }: NewTicketModalProps) {
   const { t } = useTranslation(["support", "validation"]);
   const [form] = Form.useForm<CreateTicketFormValues>();
   const uploadRef = useRef<FileUploadHandle>(null);
+  const canUpload = useCanUploadOwnFiles();
+  const { t: tUpload } = useTranslation("upload");
   const [isUploading, setIsUploading] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -105,7 +109,15 @@ export function NewTicketModal({ open, onOpenChange }: NewTicketModalProps) {
         </Form.Item>
 
         <Form.Item label={t("new.attachments")}>
-          <FileUpload ref={uploadRef} category={FILE_CATEGORY.SUPPORT_ATTACHMENT} disabled={busy} />
+          {canUpload ? (
+            <FileUpload
+              ref={uploadRef}
+              category={FILE_CATEGORY.SUPPORT_ATTACHMENT}
+              disabled={busy}
+            />
+          ) : (
+            <PermissionNote text={tUpload("restricted")} />
+          )}
         </Form.Item>
 
         <div className="mt-2 flex justify-end gap-2">

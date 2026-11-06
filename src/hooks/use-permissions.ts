@@ -5,6 +5,8 @@ import { SystemRole } from "@/lib/types/user";
 import { useAuthStore } from "@/stores/auth.store";
 
 export interface PermissionsApi {
+  /** False until the auth store holds the user: do not render a forbidden state yet. */
+  isReady: boolean;
   /** True when the current user is a superadmin (implicitly holds everything). */
   isSuperadmin: boolean;
   /** The permission keys the account can use (empty for superadmins). */
@@ -29,6 +31,7 @@ export function usePermissions(): PermissionsApi {
     const permissions = user?.permissions ?? [];
     const granted = new Set(permissions);
     return {
+      isReady: Boolean(user),
       isSuperadmin,
       permissions,
       has: (permission: Permission) => isSuperadmin || granted.has(permission),
@@ -83,3 +86,18 @@ export const useCanWritePermissionSets = (): boolean =>
 export const useCanReadAdmins = (): boolean => usePermissions().has(Permission.AdminsRead);
 export const useCanWriteAdmins = (): boolean => usePermissions().has(Permission.AdminsWrite);
 export const useCanDeleteAdmins = (): boolean => usePermissions().has(Permission.AdminsDelete);
+
+// Self-service keys: what an account may do with its own data. Admins and
+// superadmins pass them too (the default role carries them; superadmins hold all).
+export const useCanUpdateOwnProfile = (): boolean =>
+  usePermissions().has(Permission.SelfProfileUpdate);
+export const useCanUploadOwnFiles = (): boolean => usePermissions().has(Permission.SelfFilesUpload);
+export const useCanReadOwnNotifications = (): boolean =>
+  usePermissions().has(Permission.SelfNotificationsRead);
+export const useCanReadOwnSupport = (): boolean => usePermissions().has(Permission.SelfSupportRead);
+export const useCanCreateOwnTicket = (): boolean =>
+  usePermissions().has(Permission.SelfSupportCreate);
+export const useCanReplyOwnTicket = (): boolean =>
+  usePermissions().has(Permission.SelfSupportReply);
+export const useCanCloseOwnTicket = (): boolean =>
+  usePermissions().has(Permission.SelfSupportClose);

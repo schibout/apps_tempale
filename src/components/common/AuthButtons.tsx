@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { usePublicSettings } from "@/hooks/api/use-system-settings";
+import { useCanReadOwnSupport } from "@/hooks/use-permissions";
 import { getLocaleFromPath, ROUTES, getLocalizedPath } from "@/lib/config/routes";
 import { SystemRole } from "@/lib/types/user";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,8 @@ interface MenuEntry {
   labelKey: string;
   route: string;
   adminOnly?: boolean;
+  // Hidden unless the account holds `self.support:read`.
+  supportOnly?: boolean;
 }
 
 const MENU_ENTRIES: MenuEntry[] = [
@@ -51,7 +54,13 @@ const MENU_ENTRIES: MenuEntry[] = [
     route: ROUTES.dashboard,
   },
   { key: "profile", icon: UserIcon, labelKey: "common:nav.profile", route: ROUTES.profile },
-  { key: "support", icon: LifeBuoy, labelKey: "common:nav.support", route: ROUTES.support },
+  {
+    key: "support",
+    icon: LifeBuoy,
+    labelKey: "common:nav.support",
+    route: ROUTES.support,
+    supportOnly: true,
+  },
 ];
 
 export const AuthButtons = ({ user, onNavigate }: AuthButtonsProps) => {
@@ -62,6 +71,7 @@ export const AuthButtons = ({ user, onNavigate }: AuthButtonsProps) => {
   const { data: publicSettings } = usePublicSettings();
   const canRegister = publicSettings?.data.registration_enabled !== false;
   const [open, setOpen] = useState(false);
+  const canReadSupport = useCanReadOwnSupport();
 
   const navigate = (path: string) => {
     setOpen(false);
@@ -104,7 +114,9 @@ export const AuthButtons = ({ user, onNavigate }: AuthButtonsProps) => {
       : t("common:ui.userFallback", "User");
 
   const entries = MENU_ENTRIES.filter(
-    (entry) => !entry.adminOnly || user.role === SystemRole.ADMIN,
+    (entry) =>
+      (!entry.adminOnly || user.role === SystemRole.ADMIN) &&
+      (!entry.supportOnly || canReadSupport),
   );
 
   const panel = (

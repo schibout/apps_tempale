@@ -6,9 +6,11 @@ import { Form } from "antd";
 import { User, Edit2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUpdateMe } from "@/hooks/api/use-users";
+import { useCanUpdateOwnProfile } from "@/hooks/use-permissions";
 import { type ProfileFormValues } from "@/schemas/user";
 import { useAuthStore } from "@/stores/auth.store";
 
@@ -19,6 +21,7 @@ export const ProfileInfoTab = () => {
   const { user, setUser } = useAuthStore();
   const { mutate: updateMe, isPending: isLoading } = useUpdateMe();
   const [isEditing, setIsEditing] = useState(false);
+  const canUpdate = useCanUpdateOwnProfile();
 
   const initialValues: ProfileFormValues = {
     first_name: user?.first_name || "",
@@ -54,7 +57,7 @@ export const ProfileInfoTab = () => {
           </CardTitle>
           <CardDescription>{t("info.description")}</CardDescription>
         </div>
-        {!isEditing && (
+        {!isEditing && canUpdate && (
           <Button
             variant="outline"
             onClick={() => {
@@ -75,6 +78,8 @@ export const ProfileInfoTab = () => {
         requiredMark={false}
       >
         <ProfileFormFields isEditing={isEditing} isLoading={isLoading} t={t} user={user} />
+
+        {!canUpdate && <PermissionNote text={t("restricted")} className="px-6 pb-6" />}
 
         {isEditing && (
           <div className="flex flex-col gap-3 px-6 pb-6 sm:flex-row sm:justify-end">

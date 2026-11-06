@@ -36,7 +36,8 @@
     "you": "You",
     "supportTeam": "Support",
     "attachments": "Attachments",
-    "empty": "No messages yet."
+    "empty": "No messages yet.",
+    "replyRestricted": "You can't reply to this ticket."
   },
   "status": {
     "open": "Open",
@@ -82,5 +83,6 @@
     "reply": "Reply",
     "updateStatus": "Status",
     "updatePriority": "Priority"
-  }
+  },
+  "restricted": "You don't have access to your support tickets."
 }

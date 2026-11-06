@@ -25,5 +25,6 @@
     "promoted_to_superadmin": "You have been promoted to superadmin.",
     "demoted_superadmin_to_admin": "You have been demoted to admin.",
     "root_transferred": "The root superadmin role has been transferred."
-  }
+  },
+  "restricted": "You don't have access to notifications."
 }

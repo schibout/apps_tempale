@@ -1,10 +1,16 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { AuthButtons } from "@/components/common/AuthButtons";
+import { Permission } from "@/lib/types/permissions";
 import { SystemRole, type User } from "@/lib/types/user";
+import { useAuthStore } from "@/stores/auth.store";
 import { renderWithProviders } from "@/test/test-utils";
+
+afterEach(() => {
+  useAuthStore.setState({ user: null });
+});
 
 const mockUser = (overrides: Partial<User> = {}): User => ({
   id: "1",
@@ -32,6 +38,7 @@ describe("AuthButtons", () => {
 
   it("exposes a Support entry in the user dropdown (desktop parity with the mobile drawer)", async () => {
     const user = userEvent.setup();
+    useAuthStore.setState({ user: mockUser({ permissions: [Permission.SelfSupportRead] }) });
     renderWithProviders(<AuthButtons user={mockUser()} />);
 
     // Open the avatar dropdown (the only button in the authenticated view).
@@ -41,5 +48,16 @@ describe("AuthButtons", () => {
     // Sanity: the existing entries are still present.
     expect(screen.getByRole("menuitem", { name: "common:nav.profile" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "common:nav.dashboard" })).toBeInTheDocument();
+  });
+
+  it("hides the Support entry without self.support:read", async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ user: mockUser({ permissions: [] }) });
+    renderWithProviders(<AuthButtons user={mockUser()} />);
+
+    await user.click(screen.getByRole("button"));
+
+    expect(await screen.findByRole("menuitem", { name: "common:nav.profile" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "common:nav.support" })).not.toBeInTheDocument();
   });
 });

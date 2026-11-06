@@ -25,5 +25,6 @@
     "promoted_to_superadmin": "Superadmin rolüne yükseltildiniz.",
     "demoted_superadmin_to_admin": "Admin rolüne düşürüldünüz.",
     "root_transferred": "Ana superadminlik devredildi."
-  }
+  },
+  "restricted": "Bildirimlere erişim izniniz yok."
 }

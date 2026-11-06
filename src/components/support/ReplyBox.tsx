@@ -6,8 +6,10 @@ import { Form, Input } from "antd";
 import { Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { FileUpload, type FileUploadHandle } from "@/components/common/file-upload";
 import { Button } from "@/components/ui/button";
+import { useCanUploadOwnFiles } from "@/hooks/use-permissions";
 import { FILE_CATEGORY } from "@/lib/types/file";
 import type { MessageCreatePayload } from "@/lib/types/support";
 import { zodFieldRule } from "@/lib/validation/zodToAntdRule";
@@ -22,8 +24,10 @@ interface ReplyBoxProps {
 
 export function ReplyBox({ onSubmit, isPending }: ReplyBoxProps) {
   const { t } = useTranslation(["support", "validation"]);
+  const { t: tUpload } = useTranslation("upload");
   const [form] = Form.useForm<ReplyFormValues>();
   const uploadRef = useRef<FileUploadHandle>(null);
+  const canUpload = useCanUploadOwnFiles();
   const [isUploading, setIsUploading] = useState(false);
   const schema = getReplySchema(t);
 
@@ -64,12 +68,16 @@ export function ReplyBox({ onSubmit, isPending }: ReplyBoxProps) {
         />
       </Form.Item>
       <div className="flex items-center justify-between gap-3">
-        <FileUpload
-          ref={uploadRef}
-          category={FILE_CATEGORY.SUPPORT_ATTACHMENT}
-          disabled={busy}
-          variant="compact"
-        />
+        {canUpload ? (
+          <FileUpload
+            ref={uploadRef}
+            category={FILE_CATEGORY.SUPPORT_ATTACHMENT}
+            disabled={busy}
+            variant="compact"
+          />
+        ) : (
+          <PermissionNote text={tUpload("restricted")} />
+        )}
         <Button type="submit" loading={busy}>
           <Send className="h-4 w-4" />
           {t("detail.send")}

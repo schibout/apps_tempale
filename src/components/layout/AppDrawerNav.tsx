@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useUnreadCount } from "@/hooks/api/use-notifications";
 import { useBranding } from "@/hooks/use-branding";
+import { useCanReadOwnNotifications, useCanReadOwnSupport } from "@/hooks/use-permissions";
 import { ROUTES } from "@/lib/config/routes";
 import { SystemRole } from "@/lib/types/user";
 import { cn } from "@/lib/utils";
@@ -112,6 +113,10 @@ interface AuthedNavLinksProps {
 export const AuthedNavLinks = ({ user, isActive, navigate }: AuthedNavLinksProps) => {
   const { t } = useTranslation();
   const { data: unread } = useUnreadCount();
+  // The account pages (dashboard, profile) are the socle and always shown; the
+  // notifications and support entries follow their `self.*` read permission.
+  const canReadNotifications = useCanReadOwnNotifications();
+  const canReadSupport = useCanReadOwnSupport();
   return (
     <>
       {user.role === SystemRole.ADMIN && (
@@ -130,14 +135,16 @@ export const AuthedNavLinks = ({ user, isActive, navigate }: AuthedNavLinksProps
         active={isActive(ROUTES.dashboard)}
         onClick={navigate}
       />
-      <NavLink
-        href={ROUTES.notifications}
-        icon={Bell}
-        label={t("common:nav.notifications")}
-        active={isActive(ROUTES.notifications)}
-        onClick={navigate}
-        badge={unread?.unread_count ?? 0}
-      />
+      {canReadNotifications && (
+        <NavLink
+          href={ROUTES.notifications}
+          icon={Bell}
+          label={t("common:nav.notifications")}
+          active={isActive(ROUTES.notifications)}
+          onClick={navigate}
+          badge={unread?.unread_count ?? 0}
+        />
+      )}
       <NavLink
         href={ROUTES.profile}
         icon={UserIcon}
@@ -145,13 +152,15 @@ export const AuthedNavLinks = ({ user, isActive, navigate }: AuthedNavLinksProps
         active={isActive(ROUTES.profile)}
         onClick={navigate}
       />
-      <NavLink
-        href={ROUTES.support}
-        icon={LifeBuoy}
-        label={t("common:nav.support")}
-        active={isActive(ROUTES.support)}
-        onClick={navigate}
-      />
+      {canReadSupport && (
+        <NavLink
+          href={ROUTES.support}
+          icon={LifeBuoy}
+          label={t("common:nav.support")}
+          active={isActive(ROUTES.support)}
+          onClick={navigate}
+        />
+      )}
     </>
   );
 };

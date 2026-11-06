@@ -1,3 +1,5 @@
+import type { AdminUser } from "@/lib/types/admin";
+import { Permission } from "@/lib/types/permissions";
 import type {
   AdminTicketDetail,
   AdminTicketListItem,
@@ -5,6 +7,8 @@ import type {
   SupportTicketDetail,
   SupportTicketListItem,
 } from "@/lib/types/support";
+
+import { regularUser } from "../admin/admin-helpers";
 
 import type { Page } from "@playwright/test";
 
@@ -18,6 +22,15 @@ export {
 } from "../admin/admin-helpers";
 
 // --- Fixtures ---------------------------------------------------------------
+
+// An account whose role only lets it read its own tickets: no creating, replying,
+// closing, notifications, uploads or profile edits.
+export const restrictedUser: AdminUser = {
+  ...regularUser,
+  id: "user-restricted-1",
+  email: "restricted@test.com",
+  permissions: [Permission.SelfSupportRead],
+};
 
 export const userMessage: SupportMessage = {
   id: "m-1",

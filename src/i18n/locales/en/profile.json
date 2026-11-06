@@ -58,6 +58,8 @@
   },
   "avatar": {
     "title": "Profile Photo",
-    "description": "Upload a photo to personalize your account"
-  }
+    "description": "Upload a photo to personalize your account",
+    "uploadRestricted": "You can't upload files, so the photo can't be changed."
+  },
+  "restricted": "You can't edit your profile."
 }

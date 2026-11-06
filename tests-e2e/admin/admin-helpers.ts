@@ -75,6 +75,8 @@ export const regularUser: AdminUser = {
   deactivated_at: null,
   deletion_scheduled_at: null,
   suspended_at: null,
+  // The default role: every self-service key, as `/users/me` lists it.
+  permissions: ALL_PERMISSIONS.filter((p) => p.startsWith("self.")),
 };
 
 export const injectSession = async (

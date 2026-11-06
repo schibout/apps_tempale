@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import type { FilePublic } from "@/lib/types/file";
+import { Permission } from "@/lib/types/permissions";
 import { SystemRole, type User } from "@/lib/types/user";
 import { useAuthStore } from "@/stores/auth.store";
 import { server } from "@/test/msw/server";
@@ -35,6 +36,7 @@ const currentUser: User = {
   deletion_scheduled_at: null,
   suspended_at: null,
   avatar_file: avatar,
+  permissions: [Permission.SelfProfileUpdate, Permission.SelfFilesUpload],
 };
 
 beforeEach(() => {
@@ -42,6 +44,24 @@ beforeEach(() => {
 });
 
 describe("ProfileAvatar", () => {
+  it("disables the picker and explains why without self.files:upload", () => {
+    useAuthStore.setState({
+      user: { ...currentUser, permissions: [Permission.SelfProfileUpdate] },
+    });
+
+    renderWithProviders(<ProfileAvatar />);
+
+    expect(screen.getByRole("button", { name: /upload:replace/ })).toBeDisabled();
+    expect(screen.getByText("profile:avatar.uploadRestricted")).toBeInTheDocument();
+  });
+
+  it("keeps the picker enabled with both self.files:upload and self.profile:update", () => {
+    renderWithProviders(<ProfileAvatar />);
+
+    expect(screen.getByRole("button", { name: /upload:replace/ })).toBeEnabled();
+    expect(screen.queryByText("profile:avatar.uploadRestricted")).not.toBeInTheDocument();
+  });
+
   it("clears the current user's avatar through updateMe", async () => {
     const user = userEvent.setup();
     let body: { avatar_file_id?: string | null } | null = null;

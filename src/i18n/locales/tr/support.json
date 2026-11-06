@@ -36,7 +36,8 @@
     "you": "Siz",
     "supportTeam": "Destek",
     "attachments": "Ekler",
-    "empty": "Henüz mesaj yok."
+    "empty": "Henüz mesaj yok.",
+    "replyRestricted": "Bu talebi yanıtlama izniniz yok."
   },
   "status": {
     "open": "Açık",
@@ -82,5 +83,6 @@
     "reply": "Yanıtla",
     "updateStatus": "Durum",
     "updatePriority": "Öncelik"
-  }
+  },
+  "restricted": "Destek taleplerinize erişim izniniz yok."
 }

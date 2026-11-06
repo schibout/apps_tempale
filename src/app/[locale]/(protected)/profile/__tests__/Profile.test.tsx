@@ -53,13 +53,15 @@ const mockUser = {
   first_name: "John",
   last_name: "Doe",
   title: "Software Engineer",
+  role: "user",
+  permissions: ["self.profile:update", "self.files:upload"],
 };
 
 vi.mock("@/stores/auth.store", () => ({
-  useAuthStore: vi.fn(() => ({
-    user: mockUser,
-    setUser: vi.fn(),
-  })),
+  useAuthStore: vi.fn((selector?: (state: unknown) => unknown) => {
+    const state = { user: mockUser, setUser: vi.fn() };
+    return selector ? selector(state) : state;
+  }),
 }));
 
 describe("Profile Page", () => {

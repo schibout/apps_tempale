@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useCanReadOwnSupport } from "@/hooks/use-permissions";
 import { adminSupportApi, userSupportApi } from "@/lib/api/endpoints/support";
 import type {
   AdminTicketListParams,
@@ -29,22 +30,29 @@ export const adminSupportKeys = {
 
 // --- User hooks -------------------------------------------------------------
 
-export const useMyTickets = (params?: SupportTicketListParams) =>
-  useQuery({
+// The caller's own tickets wait for `self.support:read`: without it (or before
+// the user is loaded) no request is sent.
+export const useMyTickets = (params?: SupportTicketListParams) => {
+  const enabled = useCanReadOwnSupport();
+  return useQuery({
     queryKey: supportKeys.myList(params),
     queryFn: () => userSupportApi.listTickets(params),
     placeholderData: keepPreviousData,
+    enabled,
   });
+};
 
-export const useMyTicket = (id: string | undefined) =>
-  useQuery({
+export const useMyTicket = (id: string | undefined) => {
+  const canRead = useCanReadOwnSupport();
+  return useQuery({
     queryKey: id ? supportKeys.detail(id) : ["support", "detail", "invalid"],
     queryFn: () => {
       if (!id) throw new Error("Ticket ID is required");
       return userSupportApi.getTicket(id);
     },
-    enabled: Boolean(id),
+    enabled: Boolean(id) && canRead,
   });
+};
 
 export const useCreateTicket = () => {
   const queryClient = useQueryClient();

@@ -4,6 +4,8 @@ import { useEffect } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 
+import { usePermissions } from "@/hooks/use-permissions";
+import { Permission } from "@/lib/types/permissions";
 import { SystemRole } from "@/lib/types/user";
 import { useAuthStore } from "@/stores/auth.store";
 import { useSupportRealtimeStore } from "@/stores/support-realtime.store";
@@ -17,16 +19,20 @@ export function SupportRealtimeBridge() {
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAdmin = useAuthStore((state) => state.user?.role === SystemRole.ADMIN);
+  const { has } = usePermissions();
+  // The user socket needs `self.support:read`, the admin one `support:read`.
+  // Without the key the socket never opens; granting it later opens it live.
+  const canConnect = isAdmin ? has(Permission.SupportRead) : has(Permission.SelfSupportRead);
   const connect = useSupportRealtimeStore((state) => state.connect);
   const disconnect = useSupportRealtimeStore((state) => state.disconnect);
 
   useEffect(() => {
-    if (!isAuthenticated || !userId) return;
+    if (!isAuthenticated || !userId || !canConnect) return;
     connect({ queryClient, isAdmin });
     return () => {
       disconnect();
     };
-  }, [isAuthenticated, userId, isAdmin, queryClient, connect, disconnect]);
+  }, [isAuthenticated, userId, isAdmin, canConnect, queryClient, connect, disconnect]);
 
   return null;
 }

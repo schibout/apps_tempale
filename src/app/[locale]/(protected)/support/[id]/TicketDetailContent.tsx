@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
 
+import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { MessageThread } from "@/components/support/MessageThread";
 import { ReplyBox } from "@/components/support/ReplyBox";
 import { TicketPriorityBadge, TicketStatusBadge } from "@/components/support/TicketStatusBadge";
@@ -15,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supportKeys, useCloseTicket, useMyTicket, useReplyTicket } from "@/hooks/api/use-support";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useTicketRealtime } from "@/hooks/use-support-realtime";
 import { getLocaleFromPath, getLocalizedPath, ROUTES } from "@/lib/config/routes";
+import { Permission } from "@/lib/types/permissions";
 
 interface TicketDetailContentProps {
   ticketId: string;
@@ -26,6 +29,10 @@ export function TicketDetailContent({ ticketId }: TicketDetailContentProps) {
   const { t } = useTranslation("support");
   const locale = getLocaleFromPath(usePathname());
   const queryClient = useQueryClient();
+  const { isReady, has } = usePermissions();
+  const canRead = has(Permission.SelfSupportRead);
+  const canReply = has(Permission.SelfSupportReply);
+  const canClose = has(Permission.SelfSupportClose);
   const { data: ticket, isLoading } = useMyTicket(ticketId);
   const { mutate: closeTicket, isPending: isClosing } = useCloseTicket(ticketId);
   const reply = useReplyTicket(ticketId);
@@ -53,7 +60,16 @@ export function TicketDetailContent({ ticketId }: TicketDetailContentProps) {
     </Link>
   );
 
-  if (isLoading && !ticket) {
+  if (isReady && !canRead) {
+    return (
+      <div className="mx-auto w-full max-w-480 space-y-6 p-4 sm:p-6 lg:p-8 xl:p-12">
+        {backLink}
+        <PermissionNote text={t("restricted")} />
+      </div>
+    );
+  }
+
+  if (!isReady || (isLoading && !ticket)) {
     return (
       <div className="mx-auto w-full max-w-480 space-y-6 p-4 sm:p-6 lg:p-8 xl:p-12">
         {backLink}
@@ -87,7 +103,7 @@ export function TicketDetailContent({ ticketId }: TicketDetailContentProps) {
               <TicketPriorityBadge priority={ticket.priority} />
             </div>
           </div>
-          {!isClosed ? (
+          {!isClosed && canClose ? (
             <Button
               variant="outline"
               loading={isClosing}
@@ -110,9 +126,11 @@ export function TicketDetailContent({ ticketId }: TicketDetailContentProps) {
 
       {/* Pinned composer */}
       <div className="shrink-0">
-        {isClosed ? (
+        {isClosed && (
           <p className="text-center text-sm text-muted-foreground">{t("detail.closedNotice")}</p>
-        ) : (
+        )}
+        {!isClosed && !canReply && <PermissionNote text={t("detail.replyRestricted")} />}
+        {!isClosed && canReply && (
           <ReplyBox onSubmit={reply.mutateAsync} isPending={reply.isPending} />
         )}
       </div>

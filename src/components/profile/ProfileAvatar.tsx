@@ -3,9 +3,11 @@
 import { ImageIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { AvatarUpload } from "@/components/common/file-upload";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUpdateMe } from "@/hooks/api/use-users";
+import { useCanUpdateOwnProfile, useCanUploadOwnFiles } from "@/hooks/use-permissions";
 import type { FilePublic } from "@/lib/types/file";
 import { useAuthStore } from "@/stores/auth.store";
 
@@ -13,6 +15,12 @@ export const ProfileAvatar = () => {
   const { t } = useTranslation("profile");
   const { user, setUser } = useAuthStore();
   const { mutate: updateMe } = useUpdateMe();
+  const canUpload = useCanUploadOwnFiles();
+  const canUpdateProfile = useCanUpdateOwnProfile();
+  // Picking a photo needs the upload key; attaching it needs the profile key.
+  let restrictedText: string | null = null;
+  if (!canUpload) restrictedText = t("avatar.uploadRestricted");
+  else if (!canUpdateProfile) restrictedText = t("restricted");
 
   const handleChange = (file: FilePublic | null) => {
     updateMe(
@@ -37,8 +45,13 @@ export const ProfileAvatar = () => {
         <CardDescription>{t("avatar.description")}</CardDescription>
       </CardHeader>
       <div className="flex justify-center px-6 pb-6">
-        <AvatarUpload value={user?.avatar_file ?? null} onChange={handleChange} />
+        <AvatarUpload
+          value={user?.avatar_file ?? null}
+          onChange={handleChange}
+          disabled={restrictedText !== null}
+        />
       </div>
+      {restrictedText ? <PermissionNote text={restrictedText} className="px-6 pb-6" /> : null}
     </Card>
   );
 };

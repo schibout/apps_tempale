@@ -18,7 +18,10 @@ vi.mock("@/stores/support-realtime.store", () => ({
 
 // Mutable auth state the mocked store reads through the selector.
 const { authState } = vi.hoisted(() => ({
-  authState: { user: null as { id: string; role: string } | null, isAuthenticated: false },
+  authState: {
+    user: null as { id: string; role: string; permissions?: string[] } | null,
+    isAuthenticated: false,
+  },
 }));
 
 vi.mock("@/stores/auth.store", () => ({
@@ -45,7 +48,7 @@ describe("SupportRealtimeBridge", () => {
   });
 
   it("connects after login and forwards the admin flag", () => {
-    authState.user = { id: "u-1", role: SystemRole.ADMIN };
+    authState.user = { id: "u-1", role: SystemRole.ADMIN, permissions: ["support:read"] };
     authState.isAuthenticated = true;
 
     renderBridge();
@@ -53,8 +56,54 @@ describe("SupportRealtimeBridge", () => {
     expect(connect).toHaveBeenCalledWith(expect.objectContaining({ isAdmin: true }));
   });
 
+  it("connects a user holding self.support:read", () => {
+    authState.user = { id: "u-1", role: SystemRole.USER, permissions: ["self.support:read"] };
+    authState.isAuthenticated = true;
+
+    renderBridge();
+
+    expect(connect).toHaveBeenCalledWith(expect.objectContaining({ isAdmin: false }));
+  });
+
+  it("connects a superadmin without an explicit permission list", () => {
+    authState.user = { id: "u-1", role: SystemRole.SUPERADMIN };
+    authState.isAuthenticated = true;
+
+    renderBridge();
+
+    expect(connect).toHaveBeenCalled();
+  });
+
+  it("never opens the socket without the permission, and opens it once granted", () => {
+    authState.user = { id: "u-1", role: SystemRole.USER, permissions: ["self.notifications:read"] };
+    authState.isAuthenticated = true;
+
+    const view = renderBridge();
+    expect(connect).not.toHaveBeenCalled();
+
+    authState.user = {
+      id: "u-1",
+      role: SystemRole.USER,
+      permissions: ["self.notifications:read", "self.support:read"],
+    };
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <SupportRealtimeBridge />
+      </QueryClientProvider>,
+    );
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not connect while the user is not loaded", () => {
+    authState.isAuthenticated = true;
+
+    renderBridge();
+
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it("disconnects on unmount", () => {
-    authState.user = { id: "u-1", role: SystemRole.USER };
+    authState.user = { id: "u-1", role: SystemRole.USER, permissions: ["self.support:read"] };
     authState.isAuthenticated = true;
 
     const { unmount } = renderBridge();

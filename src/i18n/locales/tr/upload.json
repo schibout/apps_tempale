@@ -10,5 +10,6 @@
   "errors": {
     "invalid_type": "Desteklenmeyen dosya türü. JPG, PNG, WebP veya GIF kullanın.",
     "too_large": "Dosya çok büyük. En fazla {{size}} olabilir."
-  }
+  },
+  "restricted": "Dosya yükleme izniniz yok."
 }

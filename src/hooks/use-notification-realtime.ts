@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { broadcastKeys } from "@/hooks/api/use-broadcasts";
 import { notificationKeys } from "@/hooks/api/use-notifications";
+import { useCanReadOwnNotifications } from "@/hooks/use-permissions";
 import { createNotificationSocket } from "@/lib/websocket/notification-socket";
 import { useAuthStore } from "@/stores/auth.store";
 
@@ -18,10 +19,13 @@ import { useAuthStore } from "@/stores/auth.store";
  */
 export const useNotificationRealtime = (): void => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const canRead = useCanReadOwnNotifications();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    // No socket without `self.notifications:read`; it opens as soon as the
+    // permission is granted (the effect re-runs when the user refreshes).
+    if (!isAuthenticated || !canRead) return;
 
     const socket = createNotificationSocket((event) => {
       void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
@@ -34,5 +38,5 @@ export const useNotificationRealtime = (): void => {
     return () => {
       socket.close();
     };
-  }, [isAuthenticated, queryClient]);
+  }, [isAuthenticated, canRead, queryClient]);
 };

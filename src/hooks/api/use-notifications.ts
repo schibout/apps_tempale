@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useCanReadOwnNotifications } from "@/hooks/use-permissions";
 import { notificationsApi } from "@/lib/api/endpoints/notifications";
 import type { NotificationListParams } from "@/lib/types/notification";
 
@@ -10,18 +11,26 @@ export const notificationKeys = {
   unreadCount: ["notifications", "unreadCount"] as const,
 };
 
-export const useNotifications = (params?: NotificationListParams) =>
-  useQuery({
+// Both reads wait for `self.notifications:read`: without it (or before the user
+// is loaded) no request is sent.
+export const useNotifications = (params?: NotificationListParams) => {
+  const enabled = useCanReadOwnNotifications();
+  return useQuery({
     queryKey: notificationKeys.list(params),
     queryFn: () => notificationsApi.list(params),
     placeholderData: keepPreviousData,
+    enabled,
   });
+};
 
-export const useUnreadCount = () =>
-  useQuery({
+export const useUnreadCount = () => {
+  const enabled = useCanReadOwnNotifications();
+  return useQuery({
     queryKey: notificationKeys.unreadCount,
     queryFn: () => notificationsApi.unreadCount(),
+    enabled,
   });
+};
 
 // The success notification is driven by the backend `message` via the axios
 // response interceptor — no manual toast in either mutation.

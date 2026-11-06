@@ -1,5 +1,5 @@
 import { renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useNotificationRealtime } from "@/hooks/use-notification-realtime";
 import type { NotificationRealtimeEvent } from "@/lib/types/notification";
@@ -12,7 +12,10 @@ const { sockets, authState } = vi.hoisted(() => ({
     onEvent: (event: NotificationRealtimeEvent) => void;
     close: ReturnType<typeof vi.fn>;
   }[],
-  authState: { isAuthenticated: true },
+  authState: {
+    isAuthenticated: true,
+    user: null as { role: string; permissions: string[] } | null,
+  },
 }));
 
 vi.mock("@/lib/websocket/notification-socket", () => ({
@@ -24,12 +27,17 @@ vi.mock("@/lib/websocket/notification-socket", () => ({
 }));
 
 vi.mock("@/stores/auth.store", () => ({
-  useAuthStore: (selector: (s: { isAuthenticated: boolean }) => unknown) => selector(authState),
+  useAuthStore: (selector: (s: typeof authState) => unknown) => selector(authState),
 }));
+
+beforeEach(() => {
+  authState.user = { role: "user", permissions: ["self.notifications:read"] };
+});
 
 afterEach(() => {
   sockets.length = 0;
   authState.isAuthenticated = true;
+  authState.user = { role: "user", permissions: ["self.notifications:read"] };
   vi.clearAllMocks();
 });
 
@@ -77,6 +85,35 @@ describe("useNotificationRealtime", () => {
 
   it("does not open a socket for guests", () => {
     authState.isAuthenticated = false;
+
+    renderHook(
+      () => {
+        useNotificationRealtime();
+      },
+      { wrapper: createWrapper() },
+    );
+
+    expect(sockets).toHaveLength(0);
+  });
+
+  it("does not open a socket without self.notifications:read, and opens once granted", () => {
+    authState.user = { role: "user", permissions: ["self.support:read"] };
+
+    const { rerender } = renderHook(
+      () => {
+        useNotificationRealtime();
+      },
+      { wrapper: createWrapper() },
+    );
+    expect(sockets).toHaveLength(0);
+
+    authState.user = { role: "user", permissions: ["self.notifications:read"] };
+    rerender();
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("does not open a socket while the user is not loaded", () => {
+    authState.user = null;
 
     renderHook(
       () => {

@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
 
 import {
   adminSupportKeys,
@@ -16,7 +16,10 @@ import {
   useReplyTicket,
   useUpdateAdminTicket,
 } from "@/hooks/api/use-support";
+import { Permission } from "@/lib/types/permissions";
 import type { AdminTicketDetail, SupportMessage, SupportTicketDetail } from "@/lib/types/support";
+import { SystemRole, type User } from "@/lib/types/user";
+import { useAuthStore } from "@/stores/auth.store";
 import { server } from "@/test/msw/server";
 import { createWrapper } from "@/test/test-utils";
 
@@ -73,6 +76,58 @@ const listItem = {
 };
 
 // --- User hooks -------------------------------------------------------------
+
+const makeUser = (permissions: Permission[]): User => ({
+  id: "u-1",
+  email: "u@test.com",
+  first_name: null,
+  last_name: null,
+  title: null,
+  role: SystemRole.USER,
+  is_active: true,
+  is_verified: true,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  deactivated_at: null,
+  deletion_scheduled_at: null,
+  suspended_at: null,
+  permissions,
+});
+
+beforeEach(() => {
+  useAuthStore.setState({ user: makeUser([Permission.SelfSupportRead]) });
+});
+
+afterEach(() => {
+  useAuthStore.setState({ user: null });
+});
+
+describe("own ticket reads without self.support:read", () => {
+  it("send no request when the permission is missing or the user is not loaded", async () => {
+    const hits: string[] = [];
+    server.use(
+      http.get("*/api/v1/support/tickets", ({ request }) => {
+        hits.push(request.url);
+        return HttpResponse.json({ data: [], total: 0, skip: 0, limit: 20 });
+      }),
+      http.get("*/api/v1/support/tickets/t-1", ({ request }) => {
+        hits.push(request.url);
+        return HttpResponse.json({ data: {} });
+      }),
+    );
+    for (const user of [makeUser([Permission.SelfNotificationsRead]), null]) {
+      useAuthStore.setState({ user });
+      const list = renderHook(() => useMyTickets({ limit: 20 }), { wrapper: createWrapper() });
+      const one = renderHook(() => useMyTicket("t-1"), { wrapper: createWrapper() });
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      expect(list.result.current.fetchStatus).toBe("idle");
+      expect(one.result.current.fetchStatus).toBe("idle");
+    }
+    expect(hits).toEqual([]);
+  });
+});
 
 describe("useMyTickets", () => {
   it("fetches the caller's tickets with total", async () => {

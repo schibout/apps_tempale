@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { useBranding } from "@/hooks/use-branding";
 import { useLanguage } from "@/hooks/use-language";
+import { useCanReadOwnSupport } from "@/hooks/use-permissions";
 import { useTheme } from "@/hooks/use-theme";
 import { getLocaleFromPath, ROUTES, getLocalizedPath } from "@/lib/config/routes";
 import { SPRING_SOFT, fadeIn } from "@/lib/motion/variants";
@@ -89,6 +90,7 @@ export function HomeFooter() {
   const { t } = useTranslation(["home", "common", "auth"]);
   const { siteName } = useBranding();
   const { user } = useAuthStore();
+  const canReadSupport = useCanReadOwnSupport();
   const pathname = usePathname();
   const currentLocale = getLocaleFromPath(pathname);
   const { changeLanguage } = useLanguage();
@@ -115,7 +117,7 @@ export function HomeFooter() {
   const accountLinks: FooterLink[] = user
     ? [
         { labelKey: "common:nav.profile", route: ROUTES.profile },
-        { labelKey: "common:nav.support", route: ROUTES.support },
+        ...(canReadSupport ? [{ labelKey: "common:nav.support", route: ROUTES.support }] : []),
       ]
     : [
         { labelKey: "auth:login.submitButton", route: ROUTES.login },

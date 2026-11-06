@@ -2,9 +2,16 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  useCanCloseOwnTicket,
+  useCanCreateOwnTicket,
   useCanDeleteAdmins,
   useCanDeleteUsers,
   useCanReadAdmins,
+  useCanReadOwnNotifications,
+  useCanReadOwnSupport,
+  useCanReplyOwnTicket,
+  useCanUpdateOwnProfile,
+  useCanUploadOwnFiles,
   useCanReadUsers,
   useCanWriteAdmins,
   useIsSuperadmin,
@@ -86,5 +93,49 @@ describe("per-permission hooks", () => {
     useAuthStore.setState({ user: makeUser(SystemRole.SUPERADMIN) });
     expect(renderHook(() => useCanDeleteUsers()).result.current).toBe(true);
     expect(renderHook(() => useIsSuperadmin()).result.current).toBe(true);
+  });
+});
+
+describe("self-service hooks", () => {
+  const selfHooks = [
+    [useCanUpdateOwnProfile, Permission.SelfProfileUpdate],
+    [useCanUploadOwnFiles, Permission.SelfFilesUpload],
+    [useCanReadOwnNotifications, Permission.SelfNotificationsRead],
+    [useCanReadOwnSupport, Permission.SelfSupportRead],
+    [useCanCreateOwnTicket, Permission.SelfSupportCreate],
+    [useCanReplyOwnTicket, Permission.SelfSupportReply],
+    [useCanCloseOwnTicket, Permission.SelfSupportClose],
+  ] as const;
+
+  it("each follows exactly its own key", () => {
+    for (const [hook, key] of selfHooks) {
+      useAuthStore.setState({ user: makeUser(SystemRole.USER, [key]) });
+      expect(renderHook(() => hook()).result.current).toBe(true);
+      useAuthStore.setState({ user: makeUser(SystemRole.USER, [Permission.UsersRead]) });
+      expect(renderHook(() => hook()).result.current).toBe(false);
+    }
+  });
+
+  it("deny a restricted account that only reads its tickets", () => {
+    useAuthStore.setState({ user: makeUser(SystemRole.USER, [Permission.SelfSupportRead]) });
+    expect(renderHook(() => useCanReadOwnSupport()).result.current).toBe(true);
+    expect(renderHook(() => useCanCreateOwnTicket()).result.current).toBe(false);
+    expect(renderHook(() => useCanReplyOwnTicket()).result.current).toBe(false);
+    expect(renderHook(() => useCanReadOwnNotifications()).result.current).toBe(false);
+  });
+
+  it("are all true for a superadmin and all false while the user is not loaded", () => {
+    for (const [hook] of selfHooks) {
+      useAuthStore.setState({ user: makeUser(SystemRole.SUPERADMIN) });
+      expect(renderHook(() => hook()).result.current).toBe(true);
+      useAuthStore.setState({ user: null });
+      expect(renderHook(() => hook()).result.current).toBe(false);
+    }
+  });
+
+  it("reports readiness only once the user is loaded", () => {
+    expect(renderHook(() => usePermissions()).result.current.isReady).toBe(false);
+    useAuthStore.setState({ user: makeUser(SystemRole.USER, []) });
+    expect(renderHook(() => usePermissions()).result.current.isReady).toBe(true);
   });
 });
