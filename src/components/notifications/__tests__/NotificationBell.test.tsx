@@ -1,10 +1,12 @@
 import { cleanup, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { http, HttpResponse } from "msw";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Permission } from "@/lib/types/permissions";
 import { SystemRole, type User } from "@/lib/types/user";
 import { useAuthStore } from "@/stores/auth.store";
+import { server } from "@/test/msw/server";
 import { renderWithProviders } from "@/test/test-utils";
 
 vi.mock("@/hooks/use-notification-realtime", () => ({ useNotificationRealtime: vi.fn() }));
@@ -33,6 +35,12 @@ const makeUser = (role: SystemRole, permissions?: Permission[]): User => ({
   permissions,
 });
 
+beforeEach(() => {
+  server.use(
+    http.get("*/api/v1/notifications/unread-count", () => HttpResponse.json({ unread_count: 0 })),
+  );
+});
+
 afterEach(() => {
   cleanup();
   useAuthStore.setState({ user: null, isAuthenticated: false });
@@ -45,7 +53,7 @@ describe("NotificationBell", () => {
       isAuthenticated: true,
     });
     renderWithProviders(<NotificationBell />);
-    expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "notifications:bell" })).toBeInTheDocument();
   });
 
   it("renders nothing without it", () => {
@@ -54,12 +62,12 @@ describe("NotificationBell", () => {
       isAuthenticated: true,
     });
     renderWithProviders(<NotificationBell />);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "notifications:bell" })).not.toBeInTheDocument();
   });
 
   it("renders for a superadmin", () => {
     useAuthStore.setState({ user: makeUser(SystemRole.SUPERADMIN), isAuthenticated: true });
     renderWithProviders(<NotificationBell />);
-    expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "notifications:bell" })).toBeInTheDocument();
   });
 });
