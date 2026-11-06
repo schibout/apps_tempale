@@ -18,6 +18,7 @@ from app.repositories.admin.user import (
 )
 from app.repositories.file import delete_file as delete_file_record
 from app.repositories.file import get_file
+from app.repositories.login_attempts import clear_login_attempts
 from app.repositories.user import (
     delete_user,
     get_user_by_id,
@@ -292,6 +293,34 @@ async def unsuspend_user_admin_service(
     )
 
     return Message(success=True, message=SuccessMessages.ADMIN_USER_UNSUSPENDED)
+
+
+async def unlock_user_admin_service(
+    request: Request,
+    session: AsyncSession,
+    current_user: User,
+    user_id: uuid.UUID,
+) -> Message:
+    """Clear the failed-login counter and lock of a user's account.
+
+    The audit row identifies the target by ``resource_id`` only, never by email.
+    """
+    target = await _load_target(session, user_id)
+    _guard_superadmin_target(current_user, target)
+
+    await clear_login_attempts(target.email)
+
+    await log_activity(
+        session=session,
+        user_id=current_user.id,
+        activity_type=ActivityType.UPDATE,
+        resource_type=ResourceType.USER,
+        resource_id=target.id,
+        details={"action": "unlock_user"},
+        request=request,
+    )
+
+    return Message(success=True, message=SuccessMessages.ADMIN_USER_UNLOCKED)
 
 
 async def delete_user_admin_service(

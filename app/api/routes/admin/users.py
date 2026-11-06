@@ -29,6 +29,7 @@ from app.services.admin.user_service import (
     get_user_admin_service,
     list_users_admin_service,
     suspend_user_admin_service,
+    unlock_user_admin_service,
     unsuspend_user_admin_service,
     update_user_admin_service,
 )
@@ -46,6 +47,7 @@ AdminUsersPasswordReset = Annotated[
 AdminUsersSessions = Annotated[
     User, Depends(require_permission(Permission.USERS_SESSIONS))
 ]
+AdminUsersUnlock = Annotated[User, Depends(require_permission(Permission.USERS_UNLOCK))]
 
 
 AdminUserUpdateAuth = Annotated[
@@ -160,6 +162,28 @@ async def unsuspend_user(
 ) -> Message:
     """Lift an existing admin suspension and re-enable the account."""
     return await unsuspend_user_admin_service(
+        request=request,
+        session=session,
+        current_user=current_user,
+        user_id=user_id,
+    )
+
+
+@router.post("/{user_id}/unlock", response_model=Message)
+@rate_limit_strict("10/minute")
+@audit_unexpected_failure(
+    activity_type=ActivityType.UPDATE,
+    resource_type=ResourceType.USER,
+    endpoint="/admin/users/{user_id}/unlock",
+)
+async def unlock_user(
+    request: Request,
+    current_user: AdminUsersUnlock,
+    session: SessionDep,
+    user_id: uuid.UUID,
+) -> Message:
+    """Clear a locked account's failed-login lockout."""
+    return await unlock_user_admin_service(
         request=request,
         session=session,
         current_user=current_user,

@@ -509,3 +509,82 @@ async def test_change_password_rotates_hash_and_notifies(
             row.details.get("action") for row in result.scalars().all() if row.details
         ]
     assert "admin_reset_user_password" in actions
+
+
+async def _lock_account(email: str) -> None:
+    """Drive failed logins until the account is locked."""
+    from app.core.config import settings
+    from app.repositories.login_attempts import is_login_locked, register_failed_login
+
+    for _ in range(settings.LOGIN_MAX_FAILED_ATTEMPTS):
+        await register_failed_login(email)
+    assert await is_login_locked(email) > 0
+
+
+@pytest.mark.asyncio
+async def test_admin_unlock_user_allows_login_again(admin_client: AsyncClient):
+    """Unlocking clears the lockout so the user can sign in, and is audited."""
+    from app.models.user_activity import UserActivity
+    from app.repositories.login_attempts import is_login_locked
+
+    await register_and_verify(admin_client, "locked@test.com")
+    user_id = await get_user_id("locked@test.com")
+    await _lock_account("locked@test.com")
+
+    response = await admin_client.post(f"/admin/users/{user_id}/unlock")
+    assert response.status_code == 200
+    assert response.json()["message"] == SuccessMessages.ADMIN_USER_UNLOCKED
+    assert await is_login_locked("locked@test.com") == 0
+
+    other = await admin_client.post(
+        "/auth/login", data={"username": "locked@test.com", "password": "Password123!"}
+    )
+    assert other.status_code == 200
+
+    async with TestingSessionLocal() as session:
+        rows = (await session.execute(select(UserActivity))).scalars().all()
+    unlock_rows = [
+        r for r in rows if r.details and r.details.get("action") == "unlock_user"
+    ]
+    assert len(unlock_rows) == 1
+    assert str(unlock_rows[0].resource_id) == user_id
+    assert "locked@test.com" not in str(unlock_rows[0].details)
+
+
+@pytest.mark.asyncio
+async def test_admin_unlock_user_requires_permission(client: AsyncClient):
+    """An admin without users:unlock gets 403."""
+    from app.schemas.admin_permission import Permission
+    from app.tests.admin.conftest import grant_permissions
+
+    await register_and_verify(client, "noperm@test.com")
+    await promote_to_admin("noperm@test.com")
+    await grant_permissions("noperm@test.com", [Permission.USERS_READ])
+    await register_and_verify(client, "victim@test.com")
+    victim_id = await get_user_id("victim@test.com")
+    await login(client, "noperm@test.com")
+
+    response = await client.post(f"/admin/users/{victim_id}/unlock")
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_unlock_unknown_user_returns_404(admin_client: AsyncClient):
+    """Unlocking a nonexistent account returns 404."""
+    response = await admin_client.post(f"/admin/users/{uuid.uuid4()}/unlock")
+    assert response.status_code == 404
+    assert response.json()["error"] == ErrorMessages.USER_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_unlock_superadmin(admin_client: AsyncClient):
+    """The superadmin guard applies: a plain admin cannot unlock a superadmin."""
+    from app.tests.admin.conftest import promote_to_superadmin
+
+    await register_and_verify(admin_client, "sa-locked@test.com")
+    await promote_to_superadmin("sa-locked@test.com")
+    target_id = await get_user_id("sa-locked@test.com")
+
+    response = await admin_client.post(f"/admin/users/{target_id}/unlock")
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN
