@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import fakeredis.aioredis as fakeredis
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
@@ -54,6 +55,14 @@ async def create_test_database():
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+def disable_admin_mfa(monkeypatch: pytest.MonkeyPatch):
+    """Keep admin MFA off by default; MFA tests enable it explicitly."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ADMIN_MFA_REQUIRED", False)
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
