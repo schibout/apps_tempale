@@ -409,6 +409,25 @@ async def test_delete_user_removes_row(admin_client: AsyncClient):
         result = await session.execute(select(User).where(User.email == "bye@test.com"))
         assert result.scalars().first() is None
 
+    import json
+
+    from app.models.user_activity import UserActivity
+
+    async with TestingSessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(UserActivity).where(
+                        UserActivity.resource_id == uuid.UUID(user_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert rows, "the deletion itself must still be audited"
+    assert all("bye@test.com" not in json.dumps(r.details) for r in rows)
+
 
 @pytest.mark.asyncio
 async def test_admin_cannot_delete_self(admin_client: AsyncClient):

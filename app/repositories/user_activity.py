@@ -1,8 +1,8 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import actor_reference
@@ -45,6 +45,32 @@ async def create_user_activity(
     return db_activity
 
 
+async def _rewrite_in_batches(
+    session: AsyncSession,
+    stmt: Select,
+    mutate: Callable[[UserActivity], None],
+) -> None:
+    """Apply ``mutate`` to every row of ``stmt`` using keyset-paginated batches."""
+    last_id: uuid.UUID | None = None
+    while True:
+        page = stmt if last_id is None else stmt.where(UserActivity.id > last_id)
+        rows = (
+            (
+                await session.execute(
+                    page.order_by(UserActivity.id).limit(_ANONYMIZE_BATCH_SIZE)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not rows:
+            return
+        for row in rows:
+            mutate(row)
+        await session.flush()
+        last_id = rows[-1].id
+
+
 async def anonymize_user_activities(
     session: AsyncSession, user_ids: Sequence[uuid.UUID], deleted_at: datetime
 ) -> None:
@@ -60,54 +86,31 @@ async def anonymize_user_activities(
         return
     ids = list(user_ids)
 
-    last_id: uuid.UUID | None = None
-    while True:
-        stmt = select(UserActivity).where(UserActivity.user_id.in_(ids))
-        if last_id is not None:
-            stmt = stmt.where(UserActivity.id > last_id)
-        rows = (
-            (
-                await session.execute(
-                    stmt.order_by(UserActivity.id).limit(_ANONYMIZE_BATCH_SIZE)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if not rows:
-            break
-        for row in rows:
-            row.actor_ref = actor_reference(str(row.user_id))
-            row.user_deleted_at = deleted_at
-            row.ip_address = None
-            row.user_agent = None
-            row.details = _strip_pii(row.details)
-        await session.flush()
-        last_id = rows[-1].id
+    def anonymize_own_row(row: UserActivity) -> None:
+        """Detach one of the accounts' own rows from the person."""
+        row.actor_ref = actor_reference(str(row.user_id))
+        row.user_deleted_at = deleted_at
+        row.ip_address = None
+        row.user_agent = None
+        row.details = _strip_pii(row.details)
 
-    last_id = None
-    while True:
-        stmt = select(UserActivity).where(
+    def strip_about_row(row: UserActivity) -> None:
+        """Scrub PII from a row another actor wrote about the accounts."""
+        row.details = _strip_pii(row.details)
+
+    await _rewrite_in_batches(
+        session,
+        select(UserActivity).where(UserActivity.user_id.in_(ids)),
+        anonymize_own_row,
+    )
+    await _rewrite_in_batches(
+        session,
+        select(UserActivity).where(
             UserActivity.resource_type == ResourceType.USER.value,
             UserActivity.resource_id.in_(ids),
-        )
-        if last_id is not None:
-            stmt = stmt.where(UserActivity.id > last_id)
-        rows = (
-            (
-                await session.execute(
-                    stmt.order_by(UserActivity.id).limit(_ANONYMIZE_BATCH_SIZE)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if not rows:
-            break
-        for row in rows:
-            row.details = _strip_pii(row.details)
-        await session.flush()
-        last_id = rows[-1].id
+        ),
+        strip_about_row,
+    )
 
 
 async def purge_anonymized_activities(

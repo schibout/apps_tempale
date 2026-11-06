@@ -222,7 +222,11 @@ async def test_purge_keeps_rows_until_retention_elapses():
     from app.utils import utc_now
 
     now = utc_now()
-    _, live_activity = await _seed_user_with_activity("purge-live@test.com")
+    live_user, live_activity = await _seed_user_with_activity("purge-live@test.com")
+    async with TestingSessionLocal() as session:
+        live_row = await session.get(UserActivity, live_activity)
+        live_row.created_at = now - timedelta(days=400)
+        await session.commit()
     ids = {}
     async with TestingSessionLocal() as session:
         for name, days in (("recent", 364), ("old", 366)):

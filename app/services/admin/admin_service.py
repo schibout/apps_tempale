@@ -371,7 +371,6 @@ async def delete_admin_service(
         )
 
     target_id = target.id
-    target_email = target.email
     await delete_user(session, target)
 
     await log_activity(
@@ -380,7 +379,7 @@ async def delete_admin_service(
         activity_type=ActivityType.DELETE,
         resource_type=ResourceType.USER,
         resource_id=target_id,
-        details={"action": "deleted_admin", "email": target_email},
+        details={"action": "deleted_admin"},
         request=request,
     )
 

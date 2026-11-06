@@ -1,7 +1,10 @@
 """Tests for the superadmin-only admin management endpoints (/admin/admins)."""
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.core.messages.error_message import ErrorMessages
 from app.core.messages.success_message import SuccessMessages
@@ -13,6 +16,7 @@ from app.tests.admin.conftest import (
     promote_to_superadmin,
     register_and_verify,
 )
+from app.tests.conftest import TestingSessionLocal
 
 
 @pytest.mark.asyncio
@@ -170,6 +174,25 @@ async def test_delete_admin_account(superadmin_client: AsyncClient):
 
     listing = await superadmin_client.get("/admin/admins")
     assert user_id not in {row["id"] for row in listing.json()["data"]}
+
+    import json
+
+    from app.models.user_activity import UserActivity
+
+    async with TestingSessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(UserActivity).where(
+                        UserActivity.resource_id == uuid.UUID(user_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert rows, "the deletion itself must still be audited"
+    assert all("deleteme@test.com" not in json.dumps(r.details) for r in rows)
 
 
 @pytest.mark.asyncio
