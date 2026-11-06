@@ -11,12 +11,15 @@ until its entry's TTL ends.
 import json
 import logging
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
+from fastapi import HTTPException, status
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.messages.error_message import ErrorMessages
 from app.core.redis import get_redis
 from app.models.user import User
 from app.repositories.admin.permission import get_user_permissions
@@ -205,6 +208,26 @@ async def user_has_permission_uncached(
     if not _tier_allows(user, permission):
         return False
     return permission in await get_effective_permissions_db(session, user.id)
+
+
+async def ensure_can_grant(
+    session: AsyncSession, actor: User, permissions: Iterable[Permission]
+) -> None:
+    """Raise 403 unless ``actor`` holds every key it is about to hand out.
+
+    A superadmin holds them all. Anyone else is read from the database, not the
+    cache: a grant outlives the request, so a key just withdrawn from the actor
+    must not be passed on through a stale entry.
+    """
+    if actor.role == SystemRole.SUPERADMIN:
+        return
+    held = await get_effective_permissions_db(session, actor.id)
+    for permission in permissions:
+        if permission not in held or not _tier_allows(actor, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ErrorMessages.RBAC_PRIVILEGE_ESCALATION,
+            )
 
 
 async def get_usable_permissions(session: AsyncSession, user: User) -> list[Permission]:

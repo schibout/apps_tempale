@@ -33,6 +33,7 @@ from app.services.admin.support_service import (
     ticket_exists_service,
     update_ticket_admin_service,
 )
+from app.use_cases.socket_permissions import permission_watcher
 
 router = APIRouter()
 
@@ -164,7 +165,7 @@ async def admin_feed_ws(websocket: WebSocket, session: SessionDep) -> None:
     Authenticates the cookie as an admin holding ``support:read`` (superadmins
     bypass the grant) whose session carries the ``mfa`` claim, auto-subscribes to the ``admin`` feed, then accepts
     ``subscribe``/``unsubscribe`` frames for any existing ticket. Replaces the
-    old per-ticket admin socket.
+    old per-ticket admin socket. Closed as soon as the account loses the key.
     """
     user = await get_ws_admin_user(websocket, session)
     if user is None or not await user_has_permission(
@@ -176,4 +177,9 @@ async def admin_feed_ws(websocket: WebSocket, session: SessionDep) -> None:
     async def authorize(ticket_id: uuid.UUID) -> bool:
         return await ticket_exists_service(session, ticket_id)
 
-    await serve_multiplex(websocket, feed_topic=ADMIN_TOPIC, authorize_ticket=authorize)
+    await serve_multiplex(
+        websocket,
+        feed_topic=ADMIN_TOPIC,
+        authorize_ticket=authorize,
+        watcher=permission_watcher(user, Permission.SUPPORT_READ),
+    )

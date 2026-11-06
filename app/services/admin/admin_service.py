@@ -12,6 +12,7 @@ from app.core.security import aget_password_hash, generate_otp_code
 from app.models.user import User
 from app.repositories.admin.permission import (
     get_permissions_for_users,
+    get_user_permissions,
     set_user_permissions,
 )
 from app.repositories.admin.user import (
@@ -49,7 +50,7 @@ from app.schemas.user import Language, SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
 from app.use_cases.notify import notify
-from app.use_cases.permissions import invalidate_user_permissions
+from app.use_cases.permissions import ensure_can_grant, invalidate_user_permissions
 from app.utils.email_templates import generate_root_transfer_otp_email
 
 _ROOT_TRANSFER_OTP_TTL_SECONDS = 180
@@ -101,6 +102,27 @@ async def _notify_permissions_changed(
     )
 
 
+def _guard_superadmin_target(actor: User, target: User) -> None:
+    """Refuse a delegated admin acting on a superadmin, whatever keys it holds."""
+    if (
+        target.role == SystemRole.SUPERADMIN.value
+        and actor.role != SystemRole.SUPERADMIN.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN,
+        )
+
+
+def _guard_not_self(actor: User, target: User, message: str) -> None:
+    """Refuse an admin acting on its own account."""
+    if actor.id == target.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+
 def get_permission_catalog_service() -> PermissionCatalogResponse:
     """Return every assignable RBAC permission key for the grant UI."""
     return PermissionCatalogResponse(permissions=directly_grantable_permissions())
@@ -135,10 +157,13 @@ async def create_admin_service(
 ) -> AdminMutationResponse:
     """Create a brand-new admin account with an initial permission set.
 
-    Superadmins provision admins directly (rather than promoting an existing
-    user), so the account is created already active and verified. The supplied
-    password lets the new admin sign in immediately.
+    Admins are provisioned directly (rather than by promoting an existing user),
+    so the account is created already active and verified. The supplied password
+    lets the new admin sign in immediately. A delegated caller can only hand out
+    keys it holds; this comes first so a refused call says nothing about the email.
     """
+    await ensure_can_grant(session, current_user, payload.permissions)
+
     existing = await get_user_by_email(session, payload.email)
     if existing is not None:
         raise HTTPException(
@@ -160,6 +185,7 @@ async def create_admin_service(
 
     permissions = list(dict.fromkeys(payload.permissions))
     await set_user_permissions(session, admin.id, permissions, current_user.id)
+    await invalidate_user_permissions(admin.id)
 
     await log_activity(
         session=session,
@@ -299,7 +325,12 @@ async def update_admin_permissions_service(
     user_id: uuid.UUID,
     payload: AdminPermissionsUpdate,
 ) -> AdminMutationResponse:
-    """Replace a plain admin's permission grants with the supplied set."""
+    """Replace a plain admin's permission grants with the supplied set.
+
+    A delegated caller can only change keys it holds: keys the target keeps are
+    not a grant, while adding or withdrawing one needs the key. Its own account is
+    refused, since rewriting it could turn a temporary key into a permanent grant.
+    """
     target = await get_user_by_id(session, user_id)
     if not target:
         raise HTTPException(
@@ -317,6 +348,10 @@ async def update_admin_permissions_service(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorMessages.NOT_AN_ADMIN,
         )
+    _guard_not_self(current_user, target, ErrorMessages.ADMIN_CANNOT_MODIFY_SELF)
+
+    current = set(await get_user_permissions(session, target.id))
+    await ensure_can_grant(session, current_user, current ^ set(payload.permissions))
 
     await set_user_permissions(session, target.id, payload.permissions, current_user.id)
     await invalidate_user_permissions(target.id)
@@ -355,6 +390,7 @@ async def delete_admin_service(
     Removing admin access is a deletion, not a demotion: there is no longer an
     admin→user downgrade path. Superadmins are never deleted here — they must be
     demoted to admin first (root only), which keeps the superadmin tier guarded.
+    A delegated caller is told so explicitly and cannot remove its own account.
     """
     target = await get_user_by_id(session, user_id)
     if not target:
@@ -362,11 +398,13 @@ async def delete_admin_service(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ErrorMessages.USER_NOT_FOUND,
         )
+    _guard_superadmin_target(current_user, target)
     if target.role != SystemRole.ADMIN.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorMessages.NOT_AN_ADMIN,
         )
+    _guard_not_self(current_user, target, ErrorMessages.ADMIN_CANNOT_DELETE_SELF)
     # Mirror the /admin/users delete guard: never remove the last active admin.
     if await is_last_active_admin(session, target.id):
         raise HTTPException(
@@ -376,6 +414,12 @@ async def delete_admin_service(
 
     target_id = target.id
     await delete_user(session, target)
+    await invalidate_user_permissions(target_id)
+    # No inbox entry for an account that is gone: the event only wakes its sockets.
+    await publish_safe(
+        account_topic(target_id),
+        AccountEvent(type=AccountEventType.PERMISSIONS_UPDATED),
+    )
 
     await log_activity(
         session=session,

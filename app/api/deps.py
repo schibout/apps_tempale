@@ -146,7 +146,7 @@ def get_current_superadmin(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> User:
-    """Require an active superadmin (admin management is superadmin-only).
+    """Require an active superadmin (the superadmin tier and root actions).
 
     The session must also carry the ``mfa`` claim when MFA is enforced.
     """

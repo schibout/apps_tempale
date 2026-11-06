@@ -59,6 +59,7 @@ class ErrorMessages:
     CANNOT_TRANSFER_TO_SELF = "error.admin.cannot_transfer_to_self"
     # Role-change immutability rules
     SUPERADMIN_ROLE_IMMUTABLE = "error.admin.superadmin_role_immutable"
+    RBAC_PRIVILEGE_ESCALATION = "error.rbac.privilege_escalation"
 
     # File / upload
     FILE_NOT_FOUND = "error.file.not_found"

@@ -1,11 +1,12 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.decorators import audit_unexpected_failure
-from app.api.deps import CurrentSuperAdmin, SessionDep
+from app.api.deps import CurrentSuperAdmin, SessionDep, require_permission
 from app.core.rate_limit import rate_limit_strict
+from app.models.user import User
 from app.schemas.admin import (
     AdminCreate,
     AdminListResponse,
@@ -15,6 +16,7 @@ from app.schemas.admin import (
     RootTransferConfirm,
     RootTransferRequest,
 )
+from app.schemas.admin_permission import Permission
 from app.schemas.msg import Message
 from app.schemas.user import Language, SystemRole
 from app.schemas.user_activity import ActivityType, ResourceType
@@ -32,6 +34,10 @@ from app.services.admin.admin_service import (
 
 router = APIRouter()
 
+AdminsRead = Annotated[User, Depends(require_permission(Permission.ADMINS_READ))]
+AdminsWrite = Annotated[User, Depends(require_permission(Permission.ADMINS_WRITE))]
+AdminsDelete = Annotated[User, Depends(require_permission(Permission.ADMINS_DELETE))]
+
 
 @router.get("", response_model=AdminListResponse)
 @audit_unexpected_failure(
@@ -41,21 +47,21 @@ router = APIRouter()
 )
 async def list_admins_endpoint(
     _request: Request,
-    _admin: CurrentSuperAdmin,
+    _admin: AdminsRead,
     session: SessionDep,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     role: SystemRole | None = None,
 ) -> AdminListResponse:
-    """List admin-tier accounts with pagination and an optional role filter (superadmin only)."""
+    """List admin-tier accounts with pagination and an optional role filter."""
     return await list_admins_service(session=session, skip=skip, limit=limit, role=role)
 
 
 @router.get("/permissions", response_model=PermissionCatalogResponse)
 async def list_permission_catalog(
-    _admin: CurrentSuperAdmin,
+    _admin: AdminsRead,
 ) -> PermissionCatalogResponse:
-    """Return all assignable permission keys for the grant UI (superadmin only)."""
+    """Return all assignable permission keys for the grant UI."""
     return get_permission_catalog_service()
 
 
@@ -117,11 +123,11 @@ async def confirm_transfer_root(
 )
 async def create_admin(
     request: Request,
-    current_user: CurrentSuperAdmin,
+    current_user: AdminsWrite,
     session: SessionDep,
     payload: AdminCreate,
 ) -> AdminMutationResponse:
-    """Create a new admin account with an initial permission set (superadmin only)."""
+    """Create a new admin account with an initial permission set."""
     return await create_admin_service(
         request=request,
         session=session,
@@ -138,12 +144,12 @@ async def create_admin(
 )
 async def set_admin_permissions(
     request: Request,
-    current_user: CurrentSuperAdmin,
+    current_user: AdminsWrite,
     session: SessionDep,
     user_id: uuid.UUID,
     payload: AdminPermissionsUpdate,
 ) -> AdminMutationResponse:
-    """Replace an admin's permission grants with the supplied set (superadmin only)."""
+    """Replace an admin's permission grants with the supplied set."""
     return await update_admin_permissions_service(
         request=request,
         session=session,
@@ -203,11 +209,11 @@ async def demote_superadmin(
 )
 async def delete_admin(
     request: Request,
-    current_user: CurrentSuperAdmin,
+    current_user: AdminsDelete,
     session: SessionDep,
     user_id: uuid.UUID,
 ) -> Message:
-    """Hard-delete an admin account (superadmin only)."""
+    """Hard-delete an admin account."""
     return await delete_admin_service(
         request=request,
         session=session,

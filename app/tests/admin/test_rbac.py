@@ -6,13 +6,25 @@ surface), so this module focuses on per-permission gating and the protection
 rules that stop a plain admin from acting on a superadmin.
 """
 
-import pytest
-from httpx import AsyncClient
+import asyncio
+import uuid
+from collections.abc import AsyncIterator
+from unittest.mock import AsyncMock, patch
 
+import pytest
+import pytest_asyncio
+from fastapi import HTTPException
+from httpx import AsyncClient
+from sqlalchemy import delete
+
+from app.core import realtime
 from app.core.messages.error_message import ErrorMessages
 from app.core.security import get_password_hash
+from app.models.admin_permission import AdminPermission
 from app.models.user import User
+from app.repositories.admin.permission import get_user_permissions
 from app.repositories.admin.user import is_last_active_superadmin
+from app.repositories.user import get_user_by_email, get_user_by_id
 from app.schemas.admin_permission import Permission
 from app.schemas.user import SystemRole
 from app.tests.admin.conftest import (
@@ -24,6 +36,11 @@ from app.tests.admin.conftest import (
     register_and_verify,
 )
 from app.tests.conftest import TestingSessionLocal
+from app.tests.test_rbac_user_routes import POLICY_VIOLATION, AsgiSocket
+from app.use_cases import socket_permissions
+from app.use_cases.permissions import ensure_can_grant, get_effective_permissions
+
+ADMIN_SOCKET_PATH = "/admin/support/ws"
 
 # What the default ``user`` role grants to any account created through the API.
 _DEFAULT_ROLE_KEYS = (
@@ -202,3 +219,544 @@ async def test_is_last_active_superadmin_repository():
         await session.commit()
 
         assert await is_last_active_superadmin(session, only_super.id) is False
+
+
+# --- Delegated admin management ---------------------------------------------
+
+
+async def _seed_target(
+    client: AsyncClient, email: str, permissions: list[Permission] | None = None
+) -> str:
+    """Create a plain admin to act on, optionally with direct grants; return its id."""
+    await register_and_verify(client, email)
+    await promote_to_admin(email)
+    if permissions:
+        await grant_permissions(email, permissions)
+    return await get_user_id(email)
+
+
+async def _seed_superadmin(client: AsyncClient, email: str) -> str:
+    """Create a superadmin to act on and return its id."""
+    await register_and_verify(client, email)
+    await promote_to_superadmin(email)
+    return await get_user_id(email)
+
+
+async def _direct_grants(user_id: str) -> set[Permission]:
+    """Return the direct grants stored for an account."""
+    async with TestingSessionLocal() as session:
+        return set(await get_user_permissions(session, uuid.UUID(user_id)))
+
+
+async def _account_exists(user_id: str) -> bool:
+    """Return whether the account is still stored."""
+    async with TestingSessionLocal() as session:
+        return await get_user_by_id(session, uuid.UUID(user_id)) is not None
+
+
+async def _load_account(email: str) -> User:
+    """Return a stored account by its email."""
+    async with TestingSessionLocal() as session:
+        user = await get_user_by_email(session, email)
+    assert user is not None
+    return user
+
+
+def _new_admin_body(email: str, permissions: list[Permission]) -> dict:
+    """Build the create-admin payload for the given keys."""
+    return {
+        "email": email,
+        "password": "Password123!",
+        "permissions": [permission.value for permission in permissions],
+    }
+
+
+@pytest.mark.asyncio
+async def test_admins_read_lists_without_being_able_to_modify(client: AsyncClient):
+    """``admins:read`` opens the list and catalog, and no mutation."""
+    target_id = await _seed_target(client, "listed@test.com")
+    await _make_admin(client, "admin-reader@test.com", [Permission.ADMINS_READ])
+
+    listing = await client.get("/admin/admins")
+    assert listing.status_code == 200
+    assert target_id in {row["id"] for row in listing.json()["data"]}
+    assert (await client.get("/admin/admins/permissions")).status_code == 200
+
+    refusals = [
+        await client.post(
+            "/admin/admins", json=_new_admin_body("reader-made@test.com", [])
+        ),
+        await client.patch(
+            f"/admin/admins/{target_id}/permissions", json={"permissions": []}
+        ),
+        await client.delete(f"/admin/admins/{target_id}"),
+    ]
+    for response in refusals:
+        assert response.status_code == 403
+        assert response.json()["error"] == ErrorMessages.INSUFFICIENT_PERMISSIONS
+    assert await _account_exists(target_id)
+
+
+@pytest.mark.asyncio
+async def test_admin_without_admins_read_cannot_list(client: AsyncClient):
+    """No admin key means no list and no catalog."""
+    await _make_admin(client, "no-admins-key@test.com", [Permission.USERS_READ])
+    assert (await client.get("/admin/admins")).status_code == 403
+    assert (await client.get("/admin/admins/permissions")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admins_write_does_not_imply_delete(client: AsyncClient):
+    """Deleting an admin takes its own key."""
+    target_id = await _seed_target(client, "kept@test.com")
+    await _make_admin(client, "admin-writer@test.com", [Permission.ADMINS_WRITE])
+
+    response = await client.delete(f"/admin/admins/{target_id}")
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.INSUFFICIENT_PERMISSIONS
+
+
+@pytest.mark.asyncio
+async def test_admins_delete_does_not_imply_write(client: AsyncClient):
+    """Changing grants takes its own key."""
+    target_id = await _seed_target(client, "unchanged@test.com")
+    await _make_admin(client, "admin-deleter@test.com", [Permission.ADMINS_DELETE])
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions", json={"permissions": []}
+    )
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.INSUFFICIENT_PERMISSIONS
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_modify_superadmin(client: AsyncClient):
+    """No grant lets a delegated admin change a superadmin's grants."""
+    target_id = await _seed_superadmin(client, "untouchable@test.com")
+    await _make_admin(client, "bold-writer@test.com", [Permission.ADMINS_WRITE])
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions", json={"permissions": []}
+    )
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_delete_superadmin(client: AsyncClient):
+    """No grant lets a delegated admin delete a superadmin, and the refusal says why."""
+    target_id = await _seed_superadmin(client, "undeletable@test.com")
+    await _make_admin(client, "bold-deleter@test.com", [Permission.ADMINS_DELETE])
+
+    response = await client.delete(f"/admin/admins/{target_id}")
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.ADMIN_CANNOT_MODIFY_SUPERADMIN
+    assert await _account_exists(target_id)
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_grant_a_key_it_lacks(client: AsyncClient):
+    """Holding ``admins:write`` is not enough to hand out any other key."""
+    target_id = await _seed_target(client, "grantee@test.com")
+    await _make_admin(client, "limited-writer@test.com", [Permission.ADMINS_WRITE])
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions",
+        json={"permissions": [Permission.SYSTEM_SETTINGS_WRITE.value]},
+    )
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.RBAC_PRIVILEGE_ESCALATION
+    assert await _direct_grants(target_id) == set()
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_grants_a_key_it_holds(client: AsyncClient):
+    """A held key can be handed on."""
+    target_id = await _seed_target(client, "grantee2@test.com")
+    await _make_admin(
+        client,
+        "able-writer@test.com",
+        [Permission.ADMINS_WRITE, Permission.USERS_READ],
+    )
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions",
+        json={"permissions": [Permission.USERS_READ.value]},
+    )
+    assert response.status_code == 200, response.text
+    assert await _direct_grants(target_id) == {Permission.USERS_READ}
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_keeps_a_targets_key_it_lacks(client: AsyncClient):
+    """Resubmitting a key the target already has grants nothing new."""
+    target_id = await _seed_target(client, "richer@test.com", [Permission.FILES_READ])
+    await _make_admin(
+        client,
+        "poorer-writer@test.com",
+        [Permission.ADMINS_WRITE, Permission.USERS_READ],
+    )
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions",
+        json={
+            "permissions": [Permission.FILES_READ.value, Permission.USERS_READ.value]
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert await _direct_grants(target_id) == {
+        Permission.FILES_READ,
+        Permission.USERS_READ,
+    }
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_revoke_a_key_it_lacks(client: AsyncClient):
+    """A delegated admin only changes keys inside its own scope."""
+    target_id = await _seed_target(client, "stripped@test.com", [Permission.FILES_READ])
+    await _make_admin(client, "stripper@test.com", [Permission.ADMINS_WRITE])
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions", json={"permissions": []}
+    )
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.RBAC_PRIVILEGE_ESCALATION
+    assert await _direct_grants(target_id) == {Permission.FILES_READ}
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_create_with_a_key_it_lacks(client: AsyncClient):
+    """Creating an admin cannot hand out more than the creator holds."""
+    await _make_admin(client, "limited-creator@test.com", [Permission.ADMINS_WRITE])
+
+    response = await client.post(
+        "/admin/admins",
+        json=_new_admin_body("too-strong@test.com", [Permission.USERS_DELETE]),
+    )
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.RBAC_PRIVILEGE_ESCALATION
+    async with TestingSessionLocal() as session:
+        assert await get_user_by_email(session, "too-strong@test.com") is None
+
+
+@pytest.mark.asyncio
+async def test_escalating_create_does_not_reveal_a_taken_email(client: AsyncClient):
+    """The escalation refusal comes first, whether or not the email exists."""
+    await register_and_verify(client, "taken-probe@test.com")
+    await _make_admin(client, "prober@test.com", [Permission.ADMINS_WRITE])
+
+    response = await client.post(
+        "/admin/admins",
+        json=_new_admin_body("taken-probe@test.com", [Permission.USERS_DELETE]),
+    )
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.RBAC_PRIVILEGE_ESCALATION
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_creates_a_plain_admin_with_held_keys(
+    client: AsyncClient,
+):
+    """A created account is a plain admin holding exactly the requested keys."""
+    await _make_admin(
+        client,
+        "able-creator@test.com",
+        [Permission.ADMINS_WRITE, Permission.USERS_READ],
+    )
+
+    response = await client.post(
+        "/admin/admins",
+        json=_new_admin_body("junior@test.com", [Permission.USERS_READ]),
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["admin"]["role"] == SystemRole.ADMIN.value
+    assert response.json()["admin"]["is_root_superadmin"] is False
+    created_id = response.json()["admin"]["id"]
+    assert await _direct_grants(created_id) == {Permission.USERS_READ}
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_change_its_own_grants(client: AsyncClient):
+    """Editing itself could turn a temporary key into a permanent direct grant."""
+    await _make_admin(client, "self-editor@test.com", [Permission.ADMINS_WRITE])
+    own_id = await get_user_id("self-editor@test.com")
+
+    response = await client.patch(
+        f"/admin/admins/{own_id}/permissions",
+        json={"permissions": [Permission.ADMINS_WRITE.value]},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == ErrorMessages.ADMIN_CANNOT_MODIFY_SELF
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_cannot_delete_itself(client: AsyncClient):
+    """Self-deletion stays refused, even when another admin would remain."""
+    await _seed_target(client, "other-admin@test.com")
+    await _make_admin(client, "self-deleter@test.com", [Permission.ADMINS_DELETE])
+    own_id = await get_user_id("self-deleter@test.com")
+
+    response = await client.delete(f"/admin/admins/{own_id}")
+    assert response.status_code == 400
+    assert response.json()["error"] == ErrorMessages.ADMIN_CANNOT_DELETE_SELF
+    assert await _account_exists(own_id)
+
+
+@pytest.mark.asyncio
+async def test_delegated_admin_deletes_a_plain_admin(client: AsyncClient):
+    """``admins:delete`` removes another plain admin."""
+    target_id = await _seed_target(client, "removable@test.com")
+    await _make_admin(client, "able-deleter@test.com", [Permission.ADMINS_DELETE])
+
+    response = await client.delete(f"/admin/admins/{target_id}")
+    assert response.status_code == 200, response.text
+    assert not await _account_exists(target_id)
+
+
+@pytest.mark.asyncio
+async def test_last_admin_guard_applies_to_a_delegated_actor(client: AsyncClient):
+    """The last-admin guard still runs on the path a delegated admin takes."""
+    target_id = await _seed_target(client, "last-standing@test.com")
+    await _make_admin(client, "guarded-deleter@test.com", [Permission.ADMINS_DELETE])
+
+    with patch(
+        "app.services.admin.admin_service.is_last_active_admin",
+        AsyncMock(return_value=True),
+    ):
+        response = await client.delete(f"/admin/admins/{target_id}")
+    assert response.status_code == 400
+    assert response.json()["error"] == ErrorMessages.ADMIN_CANNOT_DELETE_LAST_ADMIN
+    assert await _account_exists(target_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["promote", "demote"])
+async def test_tier_routes_stay_refused_to_a_fully_delegated_admin(
+    client: AsyncClient, action: str
+):
+    """Every key together still does not open the superadmin tier."""
+    target_id = await _seed_target(client, f"tier-{action}@test.com")
+    await _make_admin(client, f"delegate-{action}@test.com", list(Permission))
+
+    response = await client.post(f"/admin/admins/{target_id}/{action}")
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.ONLY_SUPERADMIN_ALLOWED
+
+
+@pytest.mark.asyncio
+async def test_root_transfer_stays_refused_to_a_fully_delegated_admin(
+    client: AsyncClient,
+):
+    """Every key together still does not open the root transfer."""
+    target_id = await _seed_superadmin(client, "would-be-root@test.com")
+    await _make_admin(client, "delegate-root@test.com", list(Permission))
+
+    responses = [
+        await client.post("/admin/admins/transfer-root", json={"user_id": target_id}),
+        await client.post(
+            "/admin/admins/transfer-root/confirm", json={"code": "123456"}
+        ),
+    ]
+    for response in responses:
+        assert response.status_code == 403
+        assert response.json()["error"] == ErrorMessages.ONLY_SUPERADMIN_ALLOWED
+
+
+@pytest.mark.asyncio
+async def test_permission_change_reaches_the_target_at_once(client: AsyncClient):
+    """A delegated change invalidates the target's cached permissions."""
+    target_id = await _seed_target(client, "cached@test.com", [Permission.USERS_READ])
+    target = await _load_account("cached@test.com")
+    async with TestingSessionLocal() as session:
+        assert Permission.USERS_READ in await get_effective_permissions(session, target)
+    await _make_admin(
+        client,
+        "revoker@test.com",
+        [Permission.ADMINS_WRITE, Permission.USERS_READ],
+    )
+
+    response = await client.patch(
+        f"/admin/admins/{target_id}/permissions",
+        json={"permissions": []},
+    )
+    assert response.status_code == 200, response.text
+    async with TestingSessionLocal() as session:
+        assert Permission.USERS_READ not in await get_effective_permissions(
+            session, target
+        )
+
+
+# --- ensure_can_grant --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ensure_can_grant_lets_a_superadmin_grant_anything(client: AsyncClient):
+    """A superadmin holds every key."""
+    await _seed_superadmin(client, "all-keys@test.com")
+    actor = await _load_account("all-keys@test.com")
+    async with TestingSessionLocal() as session:
+        await ensure_can_grant(session, actor, list(Permission))
+
+
+@pytest.mark.asyncio
+async def test_ensure_can_grant_ignores_a_stale_cache(client: AsyncClient):
+    """A key still in the cache but gone from the database cannot be handed out."""
+    await _seed_target(client, "stale@test.com", [Permission.USERS_READ])
+    actor = await _load_account("stale@test.com")
+    async with TestingSessionLocal() as session:
+        assert Permission.USERS_READ in await get_effective_permissions(session, actor)
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            delete(AdminPermission).where(AdminPermission.user_id == actor.id)
+        )
+        await session.commit()
+
+    async with TestingSessionLocal() as session:
+        with pytest.raises(HTTPException) as refused:
+            await ensure_can_grant(session, actor, [Permission.USERS_READ])
+    assert refused.value.status_code == 403
+    assert refused.value.detail == ErrorMessages.RBAC_PRIVILEGE_ESCALATION
+
+
+@pytest.mark.asyncio
+async def test_ensure_can_grant_ignores_grants_outside_the_tier(client: AsyncClient):
+    """A regular account whose admin grant rows linger cannot hand them out."""
+    await register_and_verify(client, "lingering@test.com")
+    await grant_permissions("lingering@test.com", [Permission.USERS_READ])
+    actor = await _load_account("lingering@test.com")
+
+    async with TestingSessionLocal() as session:
+        with pytest.raises(HTTPException) as refused:
+            await ensure_can_grant(session, actor, [Permission.USERS_READ])
+    assert refused.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_ensure_can_grant_accepts_nothing_to_grant(client: AsyncClient):
+    """An empty set is always allowed, whatever the actor holds."""
+    await _seed_target(client, "empty-handed@test.com")
+    actor = await _load_account("empty-handed@test.com")
+    async with TestingSessionLocal() as session:
+        await ensure_can_grant(session, actor, [])
+
+
+# --- Admin support socket -----------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def admin_socket_bus(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
+    """Run the Redis to socket bridge, with the watcher on the test database."""
+    monkeypatch.setattr(socket_permissions, "AsyncSessionLocal", TestingSessionLocal)
+    await realtime.start_realtime()
+    await asyncio.sleep(0.1)
+    try:
+        yield
+    finally:
+        await realtime.stop_realtime()
+
+
+async def _open_admin_socket(email: str) -> AsgiSocket:
+    """Open the admin support socket for an account and let its watch settle."""
+    user_id = uuid.UUID(await get_user_id(email))
+    socket = AsgiSocket(ADMIN_SOCKET_PATH, user_id)
+    assert (await socket.handshake())["type"] == "websocket.accept"
+    await asyncio.sleep(0.1)
+    return socket
+
+
+async def _expect_policy_close(socket: AsgiSocket) -> None:
+    """Assert the server closes the socket on policy grounds, then unwind it."""
+    message = await socket.next_message()
+    assert message["type"] == "websocket.close"
+    assert message["code"] == POLICY_VIOLATION
+    await socket.leave()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("admin_socket_bus")
+async def test_admin_socket_handshake_requires_support_read(client: AsyncClient):
+    """An admin without ``support:read`` never gets the socket."""
+    await _seed_target(client, "no-support@test.com", [Permission.USERS_READ])
+    user_id = uuid.UUID(await get_user_id("no-support@test.com"))
+
+    socket = AsgiSocket(ADMIN_SOCKET_PATH, user_id)
+    answer = await socket.handshake()
+    assert answer["type"] == "websocket.close"
+    assert answer["code"] == POLICY_VIOLATION
+    await socket.leave()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("admin_socket_bus")
+async def test_admin_socket_survives_a_change_keeping_support_read(
+    superadmin_client: AsyncClient,
+):
+    """Only losing the key closes the socket, not any permission change."""
+    target_id = await _seed_target(
+        superadmin_client, "keeps-support@test.com", [Permission.SUPPORT_READ]
+    )
+    socket = await _open_admin_socket("keeps-support@test.com")
+
+    response = await superadmin_client.patch(
+        f"/admin/admins/{target_id}/permissions",
+        json={
+            "permissions": [Permission.SUPPORT_READ.value, Permission.STATS_READ.value]
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    await asyncio.sleep(0.3)
+    assert socket.has_no_message()
+    await socket.leave()
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("admin_socket_bus")
+async def test_admin_socket_closes_when_support_read_is_revoked(
+    superadmin_client: AsyncClient,
+):
+    """Withdrawing ``support:read`` through the API closes the open socket."""
+    target_id = await _seed_target(
+        superadmin_client, "loses-support@test.com", [Permission.SUPPORT_READ]
+    )
+    socket = await _open_admin_socket("loses-support@test.com")
+
+    response = await superadmin_client.patch(
+        f"/admin/admins/{target_id}/permissions", json={"permissions": []}
+    )
+    assert response.status_code == 200, response.text
+
+    await _expect_policy_close(socket)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("admin_socket_bus")
+async def test_admin_socket_closes_when_superadmin_is_demoted(
+    superadmin_client: AsyncClient,
+):
+    """A demoted superadmin holds no grant anymore, so its open socket closes."""
+    target_id = await _seed_superadmin(superadmin_client, "demoted@test.com")
+    socket = await _open_admin_socket("demoted@test.com")
+
+    response = await superadmin_client.post(f"/admin/admins/{target_id}/demote")
+    assert response.status_code == 200, response.text
+
+    await _expect_policy_close(socket)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("admin_socket_bus")
+async def test_admin_socket_closes_when_the_account_is_deleted(
+    superadmin_client: AsyncClient,
+):
+    """A deleted admin does not keep following the ticket queue."""
+    await _seed_target(superadmin_client, "keeps-quorum@test.com")
+    target_id = await _seed_target(
+        superadmin_client, "deleted-live@test.com", [Permission.SUPPORT_READ]
+    )
+    socket = await _open_admin_socket("deleted-live@test.com")
+
+    response = await superadmin_client.delete(f"/admin/admins/{target_id}")
+    assert response.status_code == 200, response.text
+
+    await _expect_policy_close(socket)

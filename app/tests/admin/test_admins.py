@@ -1,4 +1,7 @@
-"""Tests for the superadmin-only admin management endpoints (/admin/admins)."""
+"""Tests for the admin management endpoints (/admin/admins), as a superadmin.
+
+Delegation to plain admins through permissions is covered in ``test_rbac.py``.
+"""
 
 import uuid
 
@@ -328,8 +331,18 @@ async def test_demote_requires_root(
 
 
 @pytest.mark.asyncio
-async def test_admin_management_is_superadmin_only(admin_client: AsyncClient):
-    """A plain admin — even with every permission — cannot manage admins."""
-    response = await admin_client.get("/admin/admins")
+async def test_superadmin_tier_stays_superadmin_only(admin_client: AsyncClient):
+    """A plain admin, even with every permission, cannot act on the superadmin tier."""
+    user_id = await get_user_id("admin@test.com")
+    response = await admin_client.post(f"/admin/admins/{user_id}/promote")
     assert response.status_code == 403
     assert response.json()["error"] == ErrorMessages.ONLY_SUPERADMIN_ALLOWED
+
+
+@pytest.mark.asyncio
+async def test_admin_with_every_permission_reads_the_admin_list(
+    admin_client: AsyncClient,
+):
+    """Reading the admin list follows ``admins:read``, not the superadmin tier."""
+    response = await admin_client.get("/admin/admins")
+    assert response.status_code == 200
