@@ -85,6 +85,39 @@ async def test_update_user_me(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_update_me_conflict_does_not_audit_the_other_users_email(
+    auth_client: AsyncClient,
+):
+    """A taken email is rejected without copying it onto the actor's audit row."""
+    from sqlalchemy import select
+
+    from app.models.user import User
+    from app.models.user_activity import UserActivity
+    from app.tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as session:
+        session.add(User(email="third_party@test.com", hashed_password="x"))
+        await session.commit()
+
+    response = await auth_client.patch(
+        "/users/me", json={"email": "third_party@test.com"}
+    )
+    assert response.status_code == 409
+
+    async with TestingSessionLocal() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(UserActivity).where(UserActivity.status == "failure")
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert [row.details for row in rows] == [{"reason": "email_already_exists"}]
+
+
+@pytest.mark.asyncio
 async def test_delete_user_me_wrong_password_rejected(auth_client: AsyncClient):
     """Wrong password must not start the grace window."""
     response = await auth_client.request(

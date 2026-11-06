@@ -58,6 +58,35 @@ async def test_patch_setting_updates_value(admin_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_patch_repairs_a_corrupt_stored_value(admin_client: AsyncClient):
+    """PATCH overwrites an unparseable value and audits the raw text as ``before``."""
+    async with TestingSessionLocal() as session:
+        await upsert_system_setting(
+            session, key="max_upload_size_mb", value="not-a-number", updated_by=None
+        )
+
+    response = await admin_client.patch(
+        "/admin/system-settings/max_upload_size_mb", json={"value": 10}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["setting"]["value"] == 10
+
+    async with TestingSessionLocal() as session:
+        row = (
+            await session.execute(
+                select(UserActivity).where(
+                    UserActivity.resource_type == ResourceType.SYSTEM_SETTINGS.value
+                )
+            )
+        ).scalar_one()
+    assert row.details == {
+        "key": "max_upload_size_mb",
+        "before": "not-a-number",
+        "after": 10,
+    }
+
+
+@pytest.mark.asyncio
 async def test_update_setting_audits_before_and_after(admin_client: AsyncClient):
     """Each update is audited with the previous and new value of the setting."""
     for value in ("First name", "Second name"):

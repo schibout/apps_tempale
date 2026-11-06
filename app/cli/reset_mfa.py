@@ -1,7 +1,7 @@
 """Last-resort MFA reset for the root superadmin, run from a server shell.
 
 Usage: ``python -m app.cli.reset_mfa <email>``. Every other account is reset
-from the admin panel, so this command refuses anything but the root superadmin.
+through the admin API, so this command refuses anything but the root superadmin.
 """
 
 import argparse

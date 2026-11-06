@@ -375,7 +375,8 @@ async def refresh_token_service(
         if request:
             await log_activity(
                 session=session,
-                user_id=parsed_user_id,
+                user_id=None,
+                actor_ref=actor_reference(str(parsed_user_id)),
                 activity_type=ActivityType.LOGIN,
                 resource_type=ResourceType.AUTH,
                 status=ActivityStatus.FAILURE,

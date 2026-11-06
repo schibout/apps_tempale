@@ -152,4 +152,3 @@ def test_local_allows_mfa_enabled_without_key() -> None:
     assert s.ADMIN_MFA_REQUIRED is True
     Fernet(s.MFA_ENCRYPTION_KEY)
     assert _settings().MFA_CHALLENGE_MINUTES == 5
-    assert _settings().STEP_UP_TTL_SECONDS == 300

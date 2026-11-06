@@ -112,7 +112,13 @@ async def update_setting_service(
             ) from exc
 
     previous = await get_system_setting_by_key(session, key)
-    before = coerce(definition, previous.value) if previous else definition.default
+    before: SettingValue = definition.default
+    if previous:
+        # A corrupt stored value must not block the only route that can repair it.
+        try:
+            before = coerce(definition, previous.value)
+        except ValueError:
+            before = previous.value
     row = await upsert_system_setting(
         session, key=key, value=to_str(payload.value), updated_by=admin.id
     )

@@ -204,7 +204,7 @@ async def create_user_service(
                 resource_type=ResourceType.USER,
                 status=ActivityStatus.FAILURE,
                 status_code=status.HTTP_409_CONFLICT,
-                details={"reason": "email_already_exists", "email": user_create.email},
+                details={"reason": "email_already_exists"},
                 request=request,
             )
         raise HTTPException(
@@ -227,7 +227,6 @@ async def create_user_service(
             activity_type=ActivityType.CREATE,
             resource_type=ResourceType.USER,
             resource_id=created_user.id,
-            details={"email": created_user.email},
             request=request,
         )
 
@@ -308,7 +307,7 @@ async def update_user_service(
                 activity_type=ActivityType.UPDATE,
                 resource_type=ResourceType.USER,
                 status=ActivityStatus.FAILURE,
-                details={"reason": "email_already_exists", "email": user_update.email},
+                details={"reason": "email_already_exists"},
                 request=request,
             )
             raise HTTPException(

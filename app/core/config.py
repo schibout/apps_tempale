@@ -53,7 +53,6 @@ class Settings(BaseSettings):
     ADMIN_MFA_REQUIRED: bool = False
     MFA_ENCRYPTION_KEY: str | None = None
     MFA_CHALLENGE_MINUTES: int = 5
-    STEP_UP_TTL_SECONDS: int = 300
 
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"

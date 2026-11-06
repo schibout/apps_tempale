@@ -150,7 +150,13 @@ async def _seed_user_with_activity(email: str) -> tuple[uuid.UUID, uuid.UUID]:
             user_id=user.id,
             activity_type="login",
             resource_type="auth",
-            details={"reason": "x", "email": email, "ip_address": "1.2.3.4"},
+            details={
+                "reason": "x",
+                "email": email,
+                "ip_address": "1.2.3.4",
+                "subject": "My name is Jane",
+                "filename": "jane-passport.pdf",
+            },
             ip_address="1.2.3.4",
             user_agent="Mozilla/5.0",
         )
@@ -180,8 +186,7 @@ async def test_hard_delete_keeps_anonymized_activity():
     assert row.user_id is None and row.user_deleted_at is not None
     assert row.actor_ref == actor_reference(str(user_id))
     assert row.ip_address is None and row.user_agent is None
-    assert "email" not in row.details and "ip_address" not in row.details
-    assert row.details["reason"] == "x"
+    assert row.details == {"reason": "x"}
 
 
 @pytest.mark.asyncio
@@ -264,3 +269,131 @@ async def test_purge_keeps_rows_until_retention_elapses():
     assert await _get_activity(ids["old"]) is None
     assert await _get_activity(ids["unknown_old"]) is None
     assert await _get_activity(live_activity) is not None
+
+
+@pytest.mark.asyncio
+async def test_anonymize_pages_beyond_one_batch(monkeypatch: pytest.MonkeyPatch):
+    """Every row is scrubbed when a trail is larger than one rewrite batch."""
+    from app.core.security import actor_reference
+    from app.repositories import user_activity as repo
+    from app.utils import utc_now
+
+    monkeypatch.setattr(repo, "_ANONYMIZE_BATCH_SIZE", 2)
+    target_id, first_own = await _seed_user_with_activity("paging-target@test.com")
+    actor_id, _ = await _seed_user_with_activity("paging-actor@test.com")
+    async with TestingSessionLocal() as session:
+        own_rows = [
+            UserActivity(
+                user_id=target_id,
+                activity_type="login",
+                resource_type="auth",
+                details={"email": "paging-target@test.com"},
+                ip_address="1.2.3.4",
+            )
+            for _ in range(4)
+        ]
+        about_rows = [
+            UserActivity(
+                user_id=actor_id,
+                activity_type="update",
+                resource_type="user",
+                resource_id=target_id,
+                details={"email": "paging-target@test.com", "action": "x"},
+            )
+            for _ in range(5)
+        ]
+        session.add_all([*own_rows, *about_rows])
+        await session.commit()
+        own_ids = [first_own, *(row.id for row in own_rows)]
+        about_ids = [row.id for row in about_rows]
+
+        await repo.anonymize_user_activities(session, [target_id], utc_now())
+        await session.commit()
+
+    for activity_id in own_ids:
+        row = await _get_activity(activity_id)
+        assert row.actor_ref == actor_reference(str(target_id))
+        assert row.ip_address is None and "email" not in row.details
+    for activity_id in about_ids:
+        row = await _get_activity(activity_id)
+        assert row.details == {"action": "x"}
+
+
+@pytest.mark.asyncio
+async def test_anonymize_first_locks_the_accounts(monkeypatch: pytest.MonkeyPatch):
+    """The accounts are locked before any audit row is read (FK insert race)."""
+    from sqlalchemy.dialects import postgresql
+
+    from app.repositories.user_activity import anonymize_user_activities
+    from app.utils import utc_now
+
+    user_id, _ = await _seed_user_with_activity("lock-first@test.com")
+    statements = []
+    async with TestingSessionLocal() as session:
+        real_execute = session.execute
+
+        async def spy(statement, *args, **kwargs):
+            """Record each statement before running it (SQLite drops FOR UPDATE)."""
+            statements.append(statement)
+            return await real_execute(statement, *args, **kwargs)
+
+        monkeypatch.setattr(session, "execute", spy)
+        await anonymize_user_activities(session, [user_id], utc_now())
+        await session.rollback()
+
+    first = str(statements[0].compile(dialect=postgresql.dialect()))
+    assert 'FROM "user"' in first and "FOR UPDATE" in first
+
+
+@pytest.mark.asyncio
+async def test_purge_job_removes_only_expired_rows(monkeypatch: pytest.MonkeyPatch):
+    """The cron job purges past the configured retention and reports the count."""
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.utils import utc_now
+    from app.worker.jobs import purge_anonymized_activities as job_module
+
+    monkeypatch.setattr(job_module, "AsyncSessionLocal", TestingSessionLocal)
+    retention = settings.ANONYMIZED_AUDIT_RETENTION_DAYS
+    now = utc_now()
+    async with TestingSessionLocal() as session:
+        expired, kept = [
+            UserActivity(
+                user_id=None,
+                actor_ref="d" * 64,
+                activity_type="login",
+                resource_type="auth",
+                details={},
+                user_deleted_at=now - timedelta(days=retention + delta),
+            )
+            for delta in (1, -1)
+        ]
+        session.add_all([expired, kept])
+        await session.commit()
+        expired_id, kept_id = expired.id, kept.id
+
+    result = await job_module.purge_anonymized_activities({})
+
+    assert result.purged == 1
+    assert await _get_activity(expired_id) is None
+    assert await _get_activity(kept_id) is not None
+
+
+def test_purge_job_is_registered_on_its_cron_schedule():
+    """The worker declares the purge job and runs it at the configured time."""
+    from app.core.config import settings
+    from app.worker.jobs.purge_anonymized_activities import (
+        purge_anonymized_activities,
+    )
+    from app.worker.settings import WorkerSettings
+
+    assert purge_anonymized_activities in WorkerSettings.functions
+    crons = [
+        job
+        for job in WorkerSettings.cron_jobs
+        if job.coroutine is purge_anonymized_activities
+    ]
+    assert len(crons) == 1
+    assert crons[0].hour == {settings.AUDIT_PURGE_CRON_HOUR}
+    assert crons[0].minute == {settings.AUDIT_PURGE_CRON_MINUTE}

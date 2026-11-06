@@ -12,6 +12,7 @@ from app.tests.admin.conftest import (
     register_and_verify,
 )
 from app.tests.conftest import TestingSessionLocal
+from app.utils import utc_now
 
 
 @pytest.mark.asyncio
@@ -185,3 +186,27 @@ async def test_admin_activity_list_returns_deleted_actor(admin_client: AsyncClie
     items = [i for i in response.json()["data"] if i["actor_ref"] == "c" * 64]
     assert len(items) == 1
     assert items[0]["user"] is None and items[0]["user_id"] is None
+    assert items[0]["user_deleted_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_admin_activity_list_exposes_user_deleted_at(admin_client: AsyncClient):
+    """A deleted account's row exposes when the account disappeared."""
+    async with TestingSessionLocal() as session:
+        session.add(
+            UserActivity(
+                user_id=None,
+                actor_ref="e" * 64,
+                user_deleted_at=utc_now(),
+                activity_type="login",
+                resource_type="auth",
+                details={},
+            )
+        )
+        await session.commit()
+
+    response = await admin_client.post("/admin/activities/search", json={"limit": 100})
+    assert response.status_code == 200
+    items = [i for i in response.json()["data"] if i["actor_ref"] == "e" * 64]
+    assert len(items) == 1
+    assert items[0]["user_deleted_at"] is not None

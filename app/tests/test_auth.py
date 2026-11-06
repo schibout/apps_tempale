@@ -24,6 +24,61 @@ async def test_register(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_refresh_for_deleted_user_returns_403_and_audits_pseudonym(
+    client: AsyncClient,
+):
+    """A refresh token outliving its account is refused without an FK violation."""
+    from sqlalchemy import delete, select, update
+
+    from app.core.security import actor_reference
+    from app.models.user import User
+    from app.models.user_activity import UserActivity
+    from app.tests.conftest import TestingSessionLocal
+
+    email = "refresh_deleted@test.com"
+    await client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": "Password123!",
+            "first_name": "Gone",
+            "last_name": "User",
+            "title": "Tester",
+        },
+    )
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.email == email).values(is_verified=True)
+        )
+        await session.commit()
+    login_response = await client.post(
+        "/auth/login", data={"username": email, "password": "Password123!"}
+    )
+    assert login_response.status_code == 200
+    async with TestingSessionLocal() as session:
+        user_id = (
+            await session.execute(select(User.id).where(User.email == email))
+        ).scalar_one()
+        await session.execute(delete(User).where(User.id == user_id))
+        await session.commit()
+
+    response = await client.post("/auth/refresh")
+
+    assert response.status_code == 403
+    assert response.json()["error"] == ErrorMessages.USER_INACTIVE
+    async with TestingSessionLocal() as session:
+        row = (
+            await session.execute(
+                select(UserActivity).where(
+                    UserActivity.actor_ref == actor_reference(str(user_id))
+                )
+            )
+        ).scalar_one()
+    assert row.user_id is None
+    assert row.details == {"reason": "user_deleted"}
+
+
+@pytest.mark.asyncio
 async def test_register_rejects_weak_password(client: AsyncClient):
     # "password123" has no uppercase and no special character -> rejected.
     response = await client.post(

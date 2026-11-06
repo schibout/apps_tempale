@@ -128,6 +128,7 @@ class AdminActivityItem(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID | None = None
     actor_ref: str | None = None
+    user_deleted_at: datetime | None = None
     user: AdminActorRef | None = None
     activity_type: ActivityType
     resource_type: ResourceType

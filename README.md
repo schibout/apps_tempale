@@ -469,7 +469,7 @@ Generate the key with `python -c "from cryptography.fernet import Fernet; print(
 
 > **Warning:** the frontend enrollment and verification screens and the step-up check do **not exist yet**. Enabling `ADMIN_MFA_REQUIRED` today therefore blocks admin sign-in through the UI. Leave it `false` until those screens ship.
 
-**Last-resort reset.** Every account except the root superadmin is reset from the admin panel. If the root superadmin loses their authenticator and recovery codes, run from a server shell:
+**Last-resort reset.** Every account except the root superadmin is reset through the admin API route; its admin panel screen will come with MFA. If the root superadmin loses their authenticator and recovery codes, run from a server shell:
 
 ```bash
 python -m app.cli.reset_mfa <email>

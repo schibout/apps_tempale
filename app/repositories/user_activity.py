@@ -6,13 +6,22 @@ from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import actor_reference
+from app.models.user import User
 from app.models.user_activity import UserActivity
 from app.schemas.common import ActivityDetails
 from app.schemas.user_activity import ResourceType, UserActivityCreate
 
 # Keys of ``UserActivity.details`` that identify a person and must not outlive
 # the account they belong to.
-ACTIVITY_PII_KEYS = {"email", "first_name", "last_name", "new_email", "ip_address"}
+ACTIVITY_PII_KEYS = {
+    "email",
+    "first_name",
+    "last_name",
+    "new_email",
+    "ip_address",
+    "subject",
+    "filename",
+}
 
 # Rows rewritten per round trip when anonymizing a (possibly large) trail.
 _ANONYMIZE_BATCH_SIZE = 500
@@ -81,10 +90,15 @@ async def anonymize_user_activities(
     actors about those accounts (``resource_type=USER``) only lose PII detail
     keys. Flushes but never commits: the caller deletes the users in the same
     transaction. The ``user_id`` itself is nulled by the FK ``ON DELETE SET NULL``.
+
+    The accounts are locked first: on PostgreSQL ``FOR UPDATE`` blocks the FK
+    key-share lock of a concurrent insert, so no fresh row escapes the scrub
+    before the DELETE. SQLite ignores the clause.
     """
     if not user_ids:
         return
     ids = list(user_ids)
+    await session.execute(select(User.id).where(User.id.in_(ids)).with_for_update())
 
     def anonymize_own_row(row: UserActivity) -> None:
         """Detach one of the accounts' own rows from the person."""
