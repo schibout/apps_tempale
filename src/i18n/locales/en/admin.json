@@ -368,6 +368,8 @@
       "file": "File",
       "support_ticket": "Support ticket",
       "system_settings": "System settings",
+      "role": "Role",
+      "permission_set": "Permission set",
       "announcement": "Announcement"
     },
     "deletedAccount": "Deleted account",

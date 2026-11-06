@@ -368,6 +368,8 @@
       "file": "Dosya",
       "support_ticket": "Destek talebi",
       "system_settings": "Sistem ayarları",
+      "role": "Rol",
+      "permission_set": "İzin seti",
       "announcement": "Duyuru"
     },
     "deletedAccount": "Silinmiş hesap",

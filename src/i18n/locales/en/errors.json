@@ -53,6 +53,19 @@
       "superadmin_role_immutable": "A superadmin's role cannot be changed."
     },
     "rbac": {
+      "role_not_found": "Role not found.",
+      "permission_set_not_found": "Permission set not found.",
+      "key_already_exists": "A role or permission set with this key already exists.",
+      "system_element": "System roles and permission sets cannot be changed or deleted.",
+      "role_in_use": "This role is still assigned to accounts. Withdraw it before deleting it.",
+      "permission_set_in_use": "This permission set is still used by a role or an account. Withdraw it before deleting it.",
+      "permission_audience_mismatch": "A permission set for users can only contain self-service permissions.",
+      "set_audience_mismatch": "A role can only include permission sets of its own audience.",
+      "user_role_required": "An account must keep at least one permanent user role.",
+      "superadmin_target": "A superadmin holds every permission: roles and permission sets cannot be assigned to it.",
+      "admin_assignment_forbidden": "Assigning an admin role or permission set to a user requires the admins:write permission.",
+      "duplicate_assignment": "The same role or permission set appears more than once.",
+      "expiry_in_past": "The expiry date must be in the future.",
       "privilege_escalation": "You can only grant or withdraw permissions you hold permanently. Temporary permissions cannot be passed on."
     },
     "notification": {

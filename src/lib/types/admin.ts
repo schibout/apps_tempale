@@ -21,6 +21,8 @@ export type ResourceType =
   | "file"
   | "support_ticket"
   | "system_settings"
+  | "role"
+  | "permission_set"
   | "announcement";
 
 export type ActivityStatus = "success" | "failure";

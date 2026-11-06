@@ -53,6 +53,19 @@
       "superadmin_role_immutable": "Bir superadmin'in rolü değiştirilemez."
     },
     "rbac": {
+      "role_not_found": "Rol bulunamadı.",
+      "permission_set_not_found": "İzin seti bulunamadı.",
+      "key_already_exists": "Bu anahtara sahip bir rol veya izin seti zaten var.",
+      "system_element": "Sistem rolleri ve izin setleri değiştirilemez veya silinemez.",
+      "role_in_use": "Bu rol hâlâ hesaplara atanmış durumda. Silmeden önce geri alın.",
+      "permission_set_in_use": "Bu izin seti hâlâ bir rol veya hesap tarafından kullanılıyor. Silmeden önce geri alın.",
+      "permission_audience_mismatch": "Kullanıcılara yönelik bir izin seti yalnızca self servis izinleri içerebilir.",
+      "set_audience_mismatch": "Bir rol yalnızca kendi hedef kitlesine ait izin setlerini içerebilir.",
+      "user_role_required": "Bir hesap en az bir kalıcı kullanıcı rolünü korumalıdır.",
+      "superadmin_target": "Superadmin tüm izinlere sahiptir: ona rol veya izin seti atanamaz.",
+      "admin_assignment_forbidden": "Bir kullanıcıya admin rolü veya izin seti atamak için admins:write izni gerekir.",
+      "duplicate_assignment": "Aynı rol veya izin seti birden fazla kez yer alıyor.",
+      "expiry_in_past": "Bitiş tarihi gelecekte olmalıdır.",
       "privilege_escalation": "Yalnızca kalıcı olarak sahip olduğunuz yetkileri verebilir veya geri alabilirsiniz. Geçici yetkiler aktarılamaz."
     },
     "notification": {

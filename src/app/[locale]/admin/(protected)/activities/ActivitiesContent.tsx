@@ -46,6 +46,8 @@ const RESOURCE_TYPES = [
   "file",
   "support_ticket",
   "system_settings",
+  "role",
+  "permission_set",
   "announcement",
 ] as const satisfies readonly ResourceType[];
 const STATUS_OPTIONS = ["success", "failure"] as const satisfies readonly ActivityStatus[];
