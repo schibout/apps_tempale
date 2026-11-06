@@ -49,6 +49,7 @@ export const useCanDeleteUsers = (): boolean => usePermissions().has(Permission.
 export const useCanSuspendUsers = (): boolean => usePermissions().has(Permission.UsersSuspend);
 export const useCanResetUserPassword = (): boolean =>
   usePermissions().has(Permission.UsersPasswordReset);
+export const useCanUnlockUsers = (): boolean => usePermissions().has(Permission.UsersUnlock);
 export const useCanManageUserSessions = (): boolean =>
   usePermissions().has(Permission.UsersSessions);
 

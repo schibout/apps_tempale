@@ -203,6 +203,7 @@
       "menu": "Satır işlemleri",
       "suspend": "Askıya al",
       "unsuspend": "Askıyı kaldır",
+      "unlock": "Hesabın kilidini aç",
       "changePassword": "Şifreyi sıfırla",
       "delete": "Kullanıcıyı sil"
     }
@@ -262,6 +263,7 @@
     "changePassword": "Şifreyi sıfırla",
     "suspend": "Hesabı askıya al",
     "unsuspend": "Askıyı kaldır",
+    "unlock": "Hesabın kilidini aç",
     "delete": "Kullanıcıyı sil",
     "deleting": "Siliniyor..."
   },
@@ -275,6 +277,9 @@
     "unsuspendTitle": "Bu askı kaldırılsın mı?",
     "unsuspendDescription": "Hesap yeniden etkinleşir ve kullanıcının erişimi geri yüklenir.",
     "unsuspendConfirm": "Askıyı kaldır",
+    "unlockTitle": "Bu hesabın kilidi açılsın mı?",
+    "unlockDescription": "Başarısız giriş sayacı ve geçici kilit temizlenir; kullanıcı hemen yeniden giriş yapabilir.",
+    "unlockConfirm": "Kilidi aç",
     "changePasswordTitle": "Şifre sıfırlansın mı?",
     "changePasswordDescription": "Kullanıcının şifresi bilinmeyen bir değere döndürülür. Yeniden erişim için giriş sayfasındaki 'Şifremi Unuttum' bağlantısını kullanması gerekir. Yeni şifreyi siz görmezsiniz.",
     "changePasswordConfirm": "Sıfırla",

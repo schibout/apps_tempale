@@ -10,6 +10,7 @@ import {
   useChangeAdminUserPassword,
   useDeleteAdminUser,
   useSuspendAdminUser,
+  useUnlockAdminUser,
   useUnsuspendAdminUser,
   useUpdateAdminUser,
 } from "@/hooks/api/use-admin";
@@ -179,6 +180,17 @@ describe("admin user mutations", () => {
     const handler = vi.fn(() => HttpResponse.json({ success: true, message: "ok" }));
     server.use(http.post("*/api/v1/admin/users/admin-1/unsuspend", handler));
     const { result } = renderHook(() => useUnsuspendAdminUser(), { wrapper: createWrapper() });
+    result.current.mutate("admin-1");
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it("useUnlockAdminUser POSTs /admin/users/:id/unlock", async () => {
+    const handler = vi.fn(() => HttpResponse.json({ success: true, message: "ok" }));
+    server.use(http.post("*/api/v1/admin/users/admin-1/unlock", handler));
+    const { result } = renderHook(() => useUnlockAdminUser(), { wrapper: createWrapper() });
     result.current.mutate("admin-1");
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);

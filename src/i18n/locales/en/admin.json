@@ -203,6 +203,7 @@
       "menu": "Row actions",
       "suspend": "Suspend",
       "unsuspend": "Lift suspension",
+      "unlock": "Unlock account",
       "changePassword": "Force password reset",
       "delete": "Delete user"
     }
@@ -262,6 +263,7 @@
     "changePassword": "Force password reset",
     "suspend": "Suspend account",
     "unsuspend": "Lift suspension",
+    "unlock": "Unlock account",
     "delete": "Delete user",
     "deleting": "Deleting..."
   },
@@ -275,6 +277,9 @@
     "unsuspendTitle": "Lift this suspension?",
     "unsuspendDescription": "This re-enables the account and restores the user's access.",
     "unsuspendConfirm": "Lift suspension",
+    "unlockTitle": "Unlock this account?",
+    "unlockDescription": "This clears the failed sign-in counter and any temporary lock, so the user can sign in again right away.",
+    "unlockConfirm": "Unlock",
     "changePasswordTitle": "Force a password reset?",
     "changePasswordDescription": "The user's password will be rotated to an unknown value. They must use the 'Forgot Password' link on the login page to regain access. You never see the new password.",
     "changePasswordConfirm": "Force reset",

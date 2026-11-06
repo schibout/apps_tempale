@@ -57,6 +57,9 @@ export const adminApi = {
   unsuspendUser: (id: string): Promise<MessageResponse> =>
     api.post<MessageResponse, MessageResponse>(`/admin/users/${id}/unsuspend`),
 
+  unlockUser: (id: string): Promise<MessageResponse> =>
+    api.post<MessageResponse, MessageResponse>(`/admin/users/${id}/unlock`),
+
   deleteUser: (id: string): Promise<MessageResponse> =>
     api.delete<MessageResponse, MessageResponse>(`/admin/users/${id}`),
 

@@ -26,6 +26,7 @@ import {
   useCanManageUserSessions,
   useCanResetUserPassword,
   useCanSuspendUsers,
+  useCanUnlockUsers,
   useCanWriteUsers,
 } from "@/hooks/use-permissions";
 import { ROUTES, getLocaleFromPath, getLocalizedPath } from "@/lib/config/routes";
@@ -50,6 +51,7 @@ export function UserDetailContent({ userId }: { userId: string }) {
     canResetPassword: useCanResetUserPassword(),
     canSuspend: useCanSuspendUsers(),
     canDelete: useCanDeleteUsers(),
+    canUnlock: useCanUnlockUsers(),
   };
 
   const [action, setAction] = useState<UserActionKind | null>(null);

@@ -14,7 +14,7 @@ interface UserActionDialogsProps {
   isLoading: boolean;
 }
 
-// Centralises the four confirm dialogs used by the users list + detail pages
+// Centralises the five confirm dialogs used by the users list + detail pages
 // so both surfaces share the same copy and behavior.
 export function UserActionDialogs({
   action,
@@ -46,6 +46,16 @@ export function UserActionDialogs({
         onConfirm={onConfirm}
         isLoading={isLoading}
         destructive
+      />
+      <ConfirmDialog
+        open={action === "unlock"}
+        onOpenChange={onOpenChange}
+        title={t("confirm.unlockTitle")}
+        description={t("confirm.unlockDescription")}
+        confirmLabel={t("confirm.unlockConfirm")}
+        cancelLabel={t("confirm.cancel")}
+        onConfirm={onConfirm}
+        isLoading={isLoading}
       />
       <ConfirmDialog
         open={action === "change-password"}

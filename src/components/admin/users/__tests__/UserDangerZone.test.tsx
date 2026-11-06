@@ -21,7 +21,7 @@ const baseUser: AdminUser = {
   suspended_at: null,
 };
 
-const allCaps = { canResetPassword: true, canSuspend: true, canDelete: true };
+const allCaps = { canResetPassword: true, canSuspend: true, canDelete: true, canUnlock: true };
 
 const renderZone = (overrides: Partial<React.ComponentProps<typeof UserDangerZone>> = {}) => {
   const props = {
@@ -80,6 +80,19 @@ describe("UserDangerZone", () => {
     expect(props.onAction).toHaveBeenCalledWith("change-password");
     expect(props.onAction).toHaveBeenCalledWith("suspend");
     expect(props.onAction).toHaveBeenCalledWith("delete");
+  });
+
+  it("offers unlock only with the unlock permission", () => {
+    const props = renderZone();
+    fireEvent.click(screen.getByRole("button", { name: /admin:userDetail\.unlock/ }));
+    expect(props.onAction).toHaveBeenCalledWith("unlock");
+  });
+
+  it("hides unlock without the unlock permission", () => {
+    renderZone({ caps: { ...allCaps, canUnlock: false } });
+    expect(
+      screen.queryByRole("button", { name: /admin:userDetail\.unlock/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("disables every button when the disabled flag is set", () => {

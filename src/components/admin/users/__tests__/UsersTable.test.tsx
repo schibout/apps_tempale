@@ -33,7 +33,7 @@ const suspended: AdminUser = {
 
 const makeProps = () => ({
   currentUserId: null,
-  caps: { canSuspend: true, canResetPassword: true, canDelete: true },
+  caps: { canSuspend: true, canResetPassword: true, canDelete: true, canUnlock: true },
   onAction: vi.fn(),
 });
 
@@ -80,6 +80,32 @@ describe("UsersTable", () => {
     const menu = await screen.findByRole("menu");
     await user.click(within(menu).getByText(/admin:users\.rowActions\.unsuspend/));
     expect(props.onAction).toHaveBeenCalledWith("unsuspend", suspended);
+  });
+
+  it("calls onAction('unlock') from the menu", async () => {
+    const user = userEvent.setup();
+    const props = makeProps();
+    renderWithProviders(<UsersTable rows={[active]} isLoading={false} {...props} />);
+    await user.click(screen.getByRole("button", { name: /admin:users\.rowActions\.menu/ }));
+    const menu = await screen.findByRole("menu");
+    await user.click(within(menu).getByText(/admin:users\.rowActions\.unlock/));
+    expect(props.onAction).toHaveBeenCalledWith("unlock", active);
+  });
+
+  it("omits the unlock entry without the unlock permission", async () => {
+    const user = userEvent.setup();
+    const props = makeProps();
+    renderWithProviders(
+      <UsersTable
+        rows={[active]}
+        isLoading={false}
+        {...props}
+        caps={{ ...props.caps, canUnlock: false }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /admin:users\.rowActions\.menu/ }));
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByText(/admin:users\.rowActions\.unlock/)).not.toBeInTheDocument();
   });
 
   it("calls onAction('delete') from the menu", async () => {

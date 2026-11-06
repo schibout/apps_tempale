@@ -4,11 +4,12 @@ import {
   useChangeAdminUserPassword,
   useDeleteAdminUser,
   useSuspendAdminUser,
+  useUnlockAdminUser,
   useUnsuspendAdminUser,
 } from "@/hooks/api/use-admin";
 import type { AdminUser } from "@/lib/types/admin";
 
-export type UserActionKind = "suspend" | "unsuspend" | "delete" | "change-password";
+export type UserActionKind = "suspend" | "unsuspend" | "unlock" | "delete" | "change-password";
 
 interface RunOptions {
   onSuccess?: () => void;
@@ -20,6 +21,7 @@ export function useUserActions() {
   const { i18n } = useTranslation();
   const suspend = useSuspendAdminUser();
   const unsuspend = useUnsuspendAdminUser();
+  const unlock = useUnlockAdminUser();
   const remove = useDeleteAdminUser();
   const changePassword = useChangeAdminUserPassword();
 
@@ -31,6 +33,9 @@ export function useUserActions() {
       case "unsuspend":
         unsuspend.mutate(user.id, opts);
         return;
+      case "unlock":
+        unlock.mutate(user.id, opts);
+        return;
       case "delete":
         remove.mutate(user.id, opts);
         return;
@@ -41,7 +46,11 @@ export function useUserActions() {
   };
 
   const isLoading =
-    suspend.isPending || unsuspend.isPending || remove.isPending || changePassword.isPending;
+    suspend.isPending ||
+    unsuspend.isPending ||
+    unlock.isPending ||
+    remove.isPending ||
+    changePassword.isPending;
 
   return { run, isLoading };
 }

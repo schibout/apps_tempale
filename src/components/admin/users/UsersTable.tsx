@@ -1,7 +1,15 @@
 "use client";
 
 import { Dropdown, type MenuProps } from "antd";
-import { Ban, ChevronRight, KeyRound, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
+import {
+  Ban,
+  ChevronRight,
+  KeyRound,
+  LockOpen,
+  MoreHorizontal,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
@@ -28,6 +36,7 @@ interface UserActionCaps {
   canSuspend: boolean;
   canResetPassword: boolean;
   canDelete: boolean;
+  canUnlock: boolean;
 }
 
 // Distinct badge tone per role so the three tiers are visually separable in the
@@ -84,6 +93,17 @@ const buildRowMenu = ({ user, isSelf, onAction, t, caps }: RowMenuArgs): MenuPro
     );
   }
 
+  if (caps.canUnlock) {
+    items.push({
+      key: "unlock",
+      icon: <LockOpen className="h-4 w-4" />,
+      label: t("users.rowActions.unlock"),
+      onClick: () => {
+        onAction("unlock", user);
+      },
+    });
+  }
+
   if (caps.canResetPassword) {
     items.push({
       key: "change-password",
@@ -116,7 +136,8 @@ export function UsersTable({ rows, isLoading, currentUserId, caps, onAction }: U
   const { t } = useTranslation("admin");
   const pathname = usePathname();
   const currentLocale = getLocaleFromPath(pathname);
-  const hasRowActions = caps.canSuspend || caps.canResetPassword || caps.canDelete;
+  const hasRowActions =
+    caps.canSuspend || caps.canResetPassword || caps.canDelete || caps.canUnlock;
 
   return (
     <AdminTable>

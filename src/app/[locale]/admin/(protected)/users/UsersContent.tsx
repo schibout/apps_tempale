@@ -22,6 +22,7 @@ import {
   useCanDeleteUsers,
   useCanResetUserPassword,
   useCanSuspendUsers,
+  useCanUnlockUsers,
 } from "@/hooks/use-permissions";
 import type { AdminUser } from "@/lib/types/admin";
 import { useAuthStore } from "@/stores/auth.store";
@@ -64,6 +65,7 @@ export function UsersContent() {
     canSuspend: useCanSuspendUsers(),
     canResetPassword: useCanResetUserPassword(),
     canDelete: useCanDeleteUsers(),
+    canUnlock: useCanUnlockUsers(),
   };
 
   const hasFilters = searchInput !== "" || role !== "all" || status !== "all" || verified !== "all";

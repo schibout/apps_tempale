@@ -106,6 +106,11 @@ export const useUnsuspendAdminUser = () => {
   });
 };
 
+export const useUnlockAdminUser = () =>
+  useMutation({
+    mutationFn: (id: string) => adminApi.unlockUser(id),
+  });
+
 export const useDeleteAdminUser = () => {
   const queryClient = useQueryClient();
   return useMutation({

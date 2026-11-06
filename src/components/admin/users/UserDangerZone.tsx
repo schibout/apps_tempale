@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, KeyRound, RotateCcw, Trash2 } from "lucide-react";
+import { Ban, KeyRound, LockOpen, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ interface UserDangerZoneCaps {
   canResetPassword: boolean;
   canSuspend: boolean;
   canDelete: boolean;
+  canUnlock: boolean;
 }
 
 interface UserDangerZoneProps {
@@ -27,7 +28,7 @@ export function UserDangerZone({ user, isSelf, disabled, caps, onAction }: UserD
 
   // Nothing destructive is permitted — omit the section entirely rather than
   // showing disabled buttons that would never fire a request.
-  if (!caps.canResetPassword && !caps.canSuspend && !caps.canDelete) {
+  if (!caps.canResetPassword && !caps.canSuspend && !caps.canDelete && !caps.canUnlock) {
     return null;
   }
 
@@ -48,6 +49,18 @@ export function UserDangerZone({ user, isSelf, disabled, caps, onAction }: UserD
           >
             <KeyRound className="mr-2 h-4 w-4" />
             {t("userDetail.changePassword")}
+          </Button>
+        ) : null}
+        {caps.canUnlock ? (
+          <Button
+            variant="outline"
+            onClick={() => {
+              onAction("unlock");
+            }}
+            disabled={disabled}
+          >
+            <LockOpen className="mr-2 h-4 w-4" />
+            {t("userDetail.unlock")}
           </Button>
         ) : null}
         {caps.canSuspend &&
