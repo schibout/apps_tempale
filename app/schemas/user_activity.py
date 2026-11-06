@@ -30,6 +30,8 @@ class ResourceType(StrEnum):
     SUPPORT_TICKET = "support_ticket"
     ANNOUNCEMENT = "announcement"
     SYSTEM_SETTINGS = "system_settings"
+    ROLE = "role"
+    PERMISSION_SET = "permission_set"
 
 
 class ActivityStatus(StrEnum):

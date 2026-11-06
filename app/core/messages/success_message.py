@@ -41,6 +41,8 @@ class SuccessMessages:
     ADMIN_PERMISSIONS_UPDATED = "success.admin.permissions_updated"
     ROOT_TRANSFER_INITIATED = "success.admin.root_transfer_initiated"
     ROOT_TRANSFERRED = "success.admin.root_transferred"
+    RBAC_ROLE_DELETED = "success.rbac.role_deleted"
+    RBAC_PERMISSION_SET_DELETED = "success.rbac.permission_set_deleted"
 
     # File / upload
     FILE_UPLOADED = "success.file.uploaded"

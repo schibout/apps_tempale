@@ -60,6 +60,19 @@ class ErrorMessages:
     # Role-change immutability rules
     SUPERADMIN_ROLE_IMMUTABLE = "error.admin.superadmin_role_immutable"
     RBAC_PRIVILEGE_ESCALATION = "error.rbac.privilege_escalation"
+    RBAC_ROLE_NOT_FOUND = "error.rbac.role_not_found"
+    RBAC_PERMISSION_SET_NOT_FOUND = "error.rbac.permission_set_not_found"
+    RBAC_KEY_ALREADY_EXISTS = "error.rbac.key_already_exists"
+    RBAC_SYSTEM_ELEMENT = "error.rbac.system_element"
+    RBAC_ROLE_IN_USE = "error.rbac.role_in_use"
+    RBAC_PERMISSION_SET_IN_USE = "error.rbac.permission_set_in_use"
+    RBAC_PERMISSION_AUDIENCE_MISMATCH = "error.rbac.permission_audience_mismatch"
+    RBAC_SET_AUDIENCE_MISMATCH = "error.rbac.set_audience_mismatch"
+    RBAC_USER_ROLE_REQUIRED = "error.rbac.user_role_required"
+    RBAC_SUPERADMIN_TARGET = "error.rbac.superadmin_target"
+    RBAC_ADMIN_ASSIGNMENT_FORBIDDEN = "error.rbac.admin_assignment_forbidden"
+    RBAC_DUPLICATE_ASSIGNMENT = "error.rbac.duplicate_assignment"
+    RBAC_EXPIRY_IN_PAST = "error.rbac.expiry_in_past"
 
     # File / upload
     FILE_NOT_FOUND = "error.file.not_found"

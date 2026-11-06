@@ -174,7 +174,7 @@ async def invalidate_all_permissions() -> None:
         logger.error("Permission cache invalidation failed: %s", exc)
 
 
-def _tier_allows(user: User, permission: Permission) -> bool:
+def tier_allows(user: User, permission: Permission) -> bool:
     """Return whether the account's tier may use the key: outside it, ``self.*`` only."""
     return user.role in (
         SystemRole.ADMIN,
@@ -193,7 +193,7 @@ async def user_has_permission(
     """
     if user.role == SystemRole.SUPERADMIN:
         return True
-    if not _tier_allows(user, permission):
+    if not tier_allows(user, permission):
         return False
     return permission in await get_effective_permissions(session, user)
 
@@ -208,7 +208,7 @@ async def user_has_permission_uncached(
     """
     if user.role == SystemRole.SUPERADMIN:
         return True
-    if not _tier_allows(user, permission):
+    if not tier_allows(user, permission):
         return False
     return permission in await get_effective_permissions_db(session, user.id)
 
@@ -229,7 +229,7 @@ async def ensure_can_grant(
     held = await get_permanent_assigned_permissions(session, actor.id)
     held |= set(await get_user_permissions(session, actor.id))
     for permission in permissions:
-        if permission not in held or not _tier_allows(actor, permission):
+        if permission not in held or not tier_allows(actor, permission):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ErrorMessages.RBAC_PRIVILEGE_ESCALATION,
@@ -278,4 +278,4 @@ async def signal_permissions_changed(user_id: uuid.UUID) -> None:
 async def get_usable_permissions(session: AsyncSession, user: User) -> list[Permission]:
     """Return the sorted keys ``user_has_permission`` accepts for this account."""
     effective = await get_effective_permissions(session, user)
-    return sorted(key for key in effective if _tier_allows(user, key))
+    return sorted(key for key in effective if tier_allows(user, key))

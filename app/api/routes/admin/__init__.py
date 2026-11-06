@@ -11,6 +11,7 @@ from app.api.routes.admin import (
     admins,
     broadcast,
     files,
+    rbac,
     stats,
     support,
     system_settings,
@@ -26,3 +27,4 @@ router.include_router(activities.router)
 router.include_router(stats.router)
 router.include_router(broadcast.router)
 router.include_router(system_settings.router)
+router.include_router(rbac.router)
