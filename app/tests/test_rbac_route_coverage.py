@@ -154,9 +154,20 @@ def _classification_problems(routes: Iterable[BaseRoute]) -> list[str]:
     return problems
 
 
+def _app_routes() -> list[BaseRoute]:
+    """Return the app's routes, leaving out routes that test modules add to it."""
+    return [
+        route
+        for route in app.routes
+        if not getattr(getattr(route, "endpoint", None), "__module__", "").startswith(
+            "app.tests"
+        )
+    ]
+
+
 def test_every_http_route_is_classified() -> None:
     """Every route of the app is guarded by a permission or explicitly listed."""
-    problems = _classification_problems(app.routes)
+    problems = _classification_problems(_app_routes())
     assert not problems, "\n".join(sorted(problems))
 
 
@@ -180,5 +191,5 @@ def test_admin_route_labelled_only_with_a_self_key_is_refused() -> None:
 
 def test_every_websocket_route_is_classified() -> None:
     """Every socket of the app is listed with its permission."""
-    paths = {r.path for r in app.routes if isinstance(r, APIWebSocketRoute)}
+    paths = {r.path for r in _app_routes() if isinstance(r, APIWebSocketRoute)}
     assert paths == set(WEBSOCKET_PERMISSIONS)
