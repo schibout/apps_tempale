@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+import { Permission } from "@/lib/types/permissions";
 import { SystemRole } from "@/lib/types/user";
 import { useAuthStore } from "@/stores/auth.store";
 import { createMockUser } from "@/test/msw/handlers";
@@ -43,6 +44,33 @@ describe("useLoginMutation", () => {
       isLoading: false,
       isSessionInitialized: false,
     });
+  });
+
+  it("stores the permissions the login response lists, with no /users/me fetch", async () => {
+    const permissions = [Permission.SelfNotificationsRead, Permission.SelfSupportRead];
+    let meRequests = 0;
+    server.use(
+      http.post("*/api/v1/auth/login", () =>
+        HttpResponse.json({
+          token_type: "bearer",
+          user: createMockUser({ permissions }),
+          message: "success.auth.login",
+        }),
+      ),
+      http.get("*/api/v1/users/me", () => {
+        meRequests += 1;
+        return HttpResponse.json(createMockUser());
+      }),
+    );
+    const { result } = renderHook(() => useLoginMutation(), { wrapper: createWrapper() });
+
+    result.current.mutate({ email: "john@example.com", password: "password123!" });
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().user?.permissions).toEqual(permissions);
+    });
+    expect(useAuthStore.getState().isSessionInitialized).toBe(true);
+    expect(meRequests).toBe(0);
   });
 
   it("routes a regular user to the dashboard", async () => {
