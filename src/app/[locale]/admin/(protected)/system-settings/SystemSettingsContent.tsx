@@ -15,7 +15,7 @@ export function SystemSettingsContent() {
   const { t } = useTranslation("systemSettings");
   const canRead = useCanReadSystemSettings();
   const canWrite = useCanWriteSystemSettings();
-  const { data, isLoading } = useSystemSettings();
+  const { data, isLoading } = useSystemSettings(canRead);
   const update = useUpdateSystemSetting();
 
   const settings = useMemo(() => data?.data ?? [], [data]);

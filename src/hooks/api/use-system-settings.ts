@@ -9,10 +9,11 @@ export const systemSettingsKeys = {
   public: ["systemSettings", "public"] as const,
 };
 
-export const useSystemSettings = () =>
+export const useSystemSettings = (enabled = true) =>
   useQuery({
     queryKey: systemSettingsKeys.list,
     queryFn: () => systemSettingsApi.list(),
+    enabled,
   });
 
 // Public config: cached 5 min so navigation never re-triggers the boot splash.
