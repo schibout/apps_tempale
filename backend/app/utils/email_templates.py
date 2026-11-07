@@ -1,0 +1,656 @@
+from app.schemas.user import Language
+
+
+def generate_password_reset_email(
+    reset_link: str, project_name: str, lang: str = Language.EN
+) -> dict[str, str]:
+    """
+    Generate subject, HTML, and plain text for password reset email.
+    """
+    if lang == Language.TR:
+        subject = "Parola Sıfırlama İsteği"
+        greeting = "Selam,"
+        message = "Hesabınız için şifre sıfırlama talebinde bulundunuz. Aşağıdaki butona tıklayarak güvenli bir şekilde yeni şifrenizi belirleyebilirsiniz."
+        btn_text = "Şifremi Sıfırla"
+        link_issue_text = "Butona tıklamakta sorun mu yaşıyorsunuz? Aşağıdaki bağlantıyı tarayıcınıza kopyalayıp yapıştırabilirsiniz:"
+        disclaimer = "Eğer bu talebi siz yapmadıysanız, bu e-postayı güvenle görmezden gelebilirsiniz. Güvenliğiniz için bu bağlantı 24 saat içinde geçersiz olacaktır."
+        footer_text = f"&copy; {project_name}. Tüm hakları saklıdır."
+        plain_text = f"Lütfen bağlantıya tıklayarak parolanızı sıfırlayın: {reset_link}"
+    else:
+        subject = "Password Reset Request"
+        greeting = "Hi there,"
+        message = "We received a request to reset your password. Click the button below to choose a new one safely."
+        btn_text = "Reset Password"
+        link_issue_text = "Having trouble with the button? Copy and paste the link below into your browser:"
+        disclaimer = "If you didn't request a password reset, you can safely ignore this email. For your security, this link will expire in 24 hours."
+        footer_text = f"&copy; {project_name}. All rights reserved."
+        plain_text = f"Please reset your password by clicking on the link: {reset_link}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{subject}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        @media only screen and (max-width: 620px) {{
+            .wrapper {{ padding: 20px !important; }}
+            .container {{ width: 100% !important; border-radius: 12px !important; overflow: hidden; }}
+            .content {{ padding: 32px 24px !important; }}
+            .header {{ padding: 32px 24px !important; }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;-webkit-font-smoothing:antialiased;">
+    <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:48px 0;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="width:600px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td class="header" style="background-color:#ffffff;padding:40px 48px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                            <div style="display:inline-block;padding:12px;background-color:#eff6ff;border-radius:12px;margin-bottom:16px;">
+                                <span style="font-size:32px;">🔐</span>
+                            </div>
+                            <h1 style="margin:0;font-size:24px;font-weight:700;color:#1e293b;letter-spacing:-0.5px;">{project_name}</h1>
+                        </td>
+                    </tr>
+                    <!-- Main Body -->
+                    <tr>
+                        <td class="content" style="padding:40px 48px;">
+                            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#0f172a;">{greeting}</p>
+                            <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#475569;">{message}</p>
+
+                            <!-- Button CTA -->
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{reset_link}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:10px;font-size:16px;font-weight:600;box-shadow:0 4px 6px -1px rgba(37,99,235,0.2);">
+                                            {btn_text}
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <div style="margin:40px 0;border-top:1px solid #f1f5f9;"></div>
+
+                            <!-- Text Link Issue -->
+                            <p style="margin:0 0 12px;font-size:14px;color:#64748b;">{link_issue_text}</p>
+                            <p style="margin:0 0 32px;font-size:13px;word-break:break-all;line-height:1.5;">
+                                <a href="{reset_link}" style="color:#2563eb;text-decoration:underline;">{reset_link}</a>
+                            </p>
+
+                            <div style="padding:20px;background-color:#f8fafc;border-radius:12px;border-left:4px solid #e2e8f0;">
+                                <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;font-style:italic;">{disclaimer}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:32px 48px;background-color:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">{project_name}</p>
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">{footer_text}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+    return {"subject": subject, "html": html, "plain_text": plain_text}
+
+
+def generate_password_reset_notification_email(
+    project_name: str, lang: str = Language.EN
+) -> dict[str, str]:
+    """
+    Generate subject, HTML, and plain text for a password-reset notification.
+
+    Sent when the user's password was rotated server-side (e.g. by an admin
+    forced reset). Deliberately link-free: the user must recover access via
+    the standard 'Forgot Password' flow on the login page so the recovery
+    path stays auditable and tied to a user-initiated request.
+    """
+    if lang == Language.TR:
+        subject = "Şifreniz sıfırlandı"
+        greeting = "Merhaba,"
+        message = "Hesabınızın şifresi sıfırlandı. Yeniden erişim için giriş sayfasındaki 'Şifremi Unuttum' bağlantısını kullanarak yeni bir şifre belirleyebilirsiniz."
+        disclaimer = (
+            "Bu işlemi beklemiyorsanız lütfen destek ile derhal iletişime geçin."
+        )
+        footer_text = f"&copy; {project_name}. Tüm hakları saklıdır."
+        plain_text = (
+            "Hesabınızın şifresi sıfırlandı. Yeniden erişim için giriş "
+            "sayfasındaki 'Şifremi Unuttum' bağlantısını kullanın. "
+            "Bu işlemi beklemiyorsanız lütfen destek ile derhal iletişime geçin."
+        )
+    else:
+        subject = "Your password has been reset"
+        greeting = "Hi there,"
+        message = "Your account password has been reset. To regain access, please use the 'Forgot Password' link on the login page to set a new password."
+        disclaimer = "If you didn't expect this, please contact support immediately."
+        footer_text = f"&copy; {project_name}. All rights reserved."
+        plain_text = (
+            "Your account password has been reset. To regain access, please "
+            "use the 'Forgot Password' link on the login page. "
+            "If you didn't expect this, please contact support immediately."
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{subject}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        @media only screen and (max-width: 620px) {{
+            .wrapper {{ padding: 20px !important; }}
+            .container {{ width: 100% !important; border-radius: 12px !important; overflow: hidden; }}
+            .content {{ padding: 32px 24px !important; }}
+            .header {{ padding: 32px 24px !important; }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;-webkit-font-smoothing:antialiased;">
+    <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:48px 0;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="width:600px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td class="header" style="background-color:#ffffff;padding:40px 48px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                            <div style="display:inline-block;padding:12px;background-color:#eff6ff;border-radius:12px;margin-bottom:16px;">
+                                <span style="font-size:32px;">🔐</span>
+                            </div>
+                            <h1 style="margin:0;font-size:24px;font-weight:700;color:#1e293b;letter-spacing:-0.5px;">{project_name}</h1>
+                        </td>
+                    </tr>
+                    <!-- Main Body -->
+                    <tr>
+                        <td class="content" style="padding:40px 48px;">
+                            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#0f172a;">{greeting}</p>
+                            <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#475569;">{message}</p>
+
+                            <div style="padding:20px;background-color:#f8fafc;border-radius:12px;border-left:4px solid #e2e8f0;">
+                                <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;font-style:italic;">{disclaimer}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:32px 48px;background-color:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">{project_name}</p>
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">{footer_text}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+    return {"subject": subject, "html": html, "plain_text": plain_text}
+
+
+def generate_account_deactivation_email(
+    reactivate_link: str,
+    grace_days: int,
+    project_name: str,
+    lang: str = Language.EN,
+) -> dict[str, str]:
+    """Generate subject, HTML, and plain text for account deactivation notice."""
+    if lang == Language.TR:
+        subject = "Hesabınız Devre Dışı Bırakıldı"
+        greeting = "Merhaba,"
+        message = (
+            f"Hesabınızı silme isteğiniz alındı. Hesabınız devre dışı bırakıldı ve "
+            f"{grace_days} gün sonra kalıcı olarak silinecek."
+        )
+        cancel_text = (
+            "Fikrinizi değiştirdiyseniz, bu süre içinde giriş yaparak silme "
+            "işlemini iptal edebilirsiniz."
+        )
+        btn_text = "Silme İşlemini İptal Et"
+        link_issue_text = "Buton çalışmıyor mu? Bu bağlantıyı tarayıcınıza kopyalayın:"
+        disclaimer = (
+            "Bu isteği siz yapmadıysanız, lütfen hemen giriş yapıp parolanızı "
+            "değiştirin ve silme işlemini iptal edin."
+        )
+        footer_text = f"&copy; {project_name}. Tüm hakları saklıdır."
+        plain_text = (
+            f"Hesabınız devre dışı bırakıldı ve {grace_days} gün sonra silinecek. "
+            f"İptal etmek için: {reactivate_link}"
+        )
+    else:
+        subject = "Your Account Has Been Deactivated"
+        greeting = "Hi there,"
+        message = (
+            f"We've received your account deletion request. Your account is now "
+            f"deactivated and will be permanently deleted in {grace_days} days."
+        )
+        cancel_text = (
+            "Changed your mind? You can cancel the deletion anytime within this "
+            "window by logging back in."
+        )
+        btn_text = "Cancel Deletion"
+        link_issue_text = (
+            "Button not working? Copy and paste this link into your browser:"
+        )
+        disclaimer = (
+            "If you didn't request this, please log in immediately, change your "
+            "password, and cancel the deletion."
+        )
+        footer_text = f"&copy; {project_name}. All rights reserved."
+        plain_text = (
+            f"Your account has been deactivated and will be deleted in "
+            f"{grace_days} days. To cancel: {reactivate_link}"
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{subject}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        @media only screen and (max-width: 620px) {{
+            .wrapper {{ padding: 20px !important; }}
+            .container {{ width: 100% !important; border-radius: 12px !important; overflow: hidden; }}
+            .content {{ padding: 32px 24px !important; }}
+            .header {{ padding: 32px 24px !important; }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;-webkit-font-smoothing:antialiased;">
+    <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:48px 0;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="width:600px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td class="header" style="background-color:#ffffff;padding:40px 48px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                            <div style="display:inline-block;padding:12px;background-color:#fef2f2;border-radius:12px;margin-bottom:16px;">
+                                <span style="font-size:32px;">⚠️</span>
+                            </div>
+                            <h1 style="margin:0;font-size:24px;font-weight:700;color:#1e293b;letter-spacing:-0.5px;">{project_name}</h1>
+                        </td>
+                    </tr>
+                    <!-- Main Body -->
+                    <tr>
+                        <td class="content" style="padding:40px 48px;">
+                            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#0f172a;">{greeting}</p>
+                            <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#475569;">{message}</p>
+                            <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#475569;">{cancel_text}</p>
+
+                            <!-- Button CTA -->
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{reactivate_link}" style="display:inline-block;background-color:#ef4444;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:10px;font-size:16px;font-weight:600;box-shadow:0 4px 6px -1px rgba(239,68,68,0.2);">
+                                            {btn_text}
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <div style="margin:40px 0;border-top:1px solid #f1f5f9;"></div>
+
+                            <!-- Text Link Issue -->
+                            <p style="margin:0 0 12px;font-size:14px;color:#64748b;">{link_issue_text}</p>
+                            <p style="margin:0 0 32px;font-size:13px;word-break:break-all;line-height:1.5;">
+                                <a href="{reactivate_link}" style="color:#ef4444;text-decoration:underline;">{reactivate_link}</a>
+                            </p>
+
+                            <div style="padding:20px;background-color:#fef2f2;border-radius:12px;border-left:4px solid #fca5a5;">
+                                <p style="margin:0;font-size:13px;line-height:1.6;color:#991b1b;font-style:italic;">{disclaimer}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:32px 48px;background-color:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">{project_name}</p>
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">{footer_text}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+    return {"subject": subject, "html": html, "plain_text": plain_text}
+
+
+def generate_email_verification_email(
+    verify_link: str, project_name: str, lang: str = Language.EN
+) -> dict[str, str]:
+    """
+    Generate subject, HTML, and plain text for email verification.
+    """
+    if lang == Language.TR:
+        subject = "E-postanızı Doğrulayın"
+        greeting = "Hoş geldin!"
+        message = "Kaydolduğunuz için çok mutluyuz. Hesabınızı aktifleştirmek ve e-posta adresinizi doğrulamak için lütfen aşağıdaki butona tıklayın."
+        btn_text = "E-postamı Doğrula"
+        link_issue_text = "Buton çalışmıyor mu? Bu bağlantıyı doğrudan tarayıcınıza kopyalayabilirsiniz:"
+        disclaimer = "Eğer bu hesabı siz oluşturmadıysanız, bu e-postayı güvenle silebilirsiniz. Herhangi bir işlem yapmanıza gerek yoktur."
+        footer_text = f"&copy; {project_name}. Tüm hakları saklıdır."
+        plain_text = (
+            f"Lütfen bağlantıya tıklayarak e-postanızı doğrulayın: {verify_link}"
+        )
+    else:
+        subject = "Verify Your Email"
+        greeting = "Welcome aboard!"
+        message = "We're excited to have you join us. Please verify your email address by clicking the button below to get started."
+        btn_text = "Verify Email"
+        link_issue_text = (
+            "Button not working? Copy and paste this link into your browser:"
+        )
+        disclaimer = "If you didn't create an account, you can safely ignore this email. No further action is required."
+        footer_text = f"&copy; {project_name}. All rights reserved."
+        plain_text = f"Please verify your email by clicking on the link: {verify_link}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{subject}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        @media only screen and (max-width: 620px) {{
+            .wrapper {{ padding: 20px !important; }}
+            .container {{ width: 100% !important; border-radius: 12px !important; overflow: hidden; }}
+            .content {{ padding: 32px 24px !important; }}
+            .header {{ padding: 32px 24px !important; }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;-webkit-font-smoothing:antialiased;">
+    <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:48px 0;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="width:600px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td class="header" style="background-color:#ffffff;padding:40px 48px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                            <div style="display:inline-block;padding:12px;background-color:#ecfdf5;border-radius:12px;margin-bottom:16px;">
+                                <span style="font-size:32px;">👋</span>
+                            </div>
+                            <h1 style="margin:0;font-size:24px;font-weight:700;color:#1e293b;letter-spacing:-0.5px;">{project_name}</h1>
+                        </td>
+                    </tr>
+                    <!-- Main Body -->
+                    <tr>
+                        <td class="content" style="padding:40px 48px;">
+                            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#0f172a;">{greeting}</p>
+                            <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#475569;">{message}</p>
+
+                            <!-- Button CTA -->
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{verify_link}" style="display:inline-block;background-color:#10b981;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:10px;font-size:16px;font-weight:600;box-shadow:0 4px 6px -1px rgba(16,185,129,0.2);">
+                                            {btn_text}
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <div style="margin:40px 0;border-top:1px solid #f1f5f9;"></div>
+
+                            <!-- Text Link Issue -->
+                            <p style="margin:0 0 12px;font-size:14px;color:#64748b;">{link_issue_text}</p>
+                            <p style="margin:0 0 32px;font-size:13px;word-break:break-all;line-height:1.5;">
+                                <a href="{verify_link}" style="color:#10b981;text-decoration:underline;">{verify_link}</a>
+                            </p>
+
+                            <div style="padding:20px;background-color:#f8fafc;border-radius:12px;border-left:4px solid #e2e8f0;">
+                                <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;font-style:italic;">{disclaimer}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:32px 48px;background-color:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">{project_name}</p>
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">{footer_text}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+    return {"subject": subject, "html": html, "plain_text": plain_text}
+
+
+def generate_root_transfer_otp_email(
+    code: str,
+    target_email: str,
+    project_name: str,
+    ttl_minutes: int,
+    lang: str = Language.EN,
+) -> dict[str, str]:
+    """Generate the OTP email confirming a root-superadmin transfer.
+
+    Sent to the *current* root superadmin's own address. The code authorizes
+    handing root status to ``target_email``.
+    """
+    if lang == Language.TR:
+        subject = "Ana Süperadmin Devri Doğrulama Kodu"
+        greeting = "Merhaba,"
+        message = (
+            "Ana süperadmin yetkinizi "
+            f"<strong>{target_email}</strong> hesabına devretmek için bir istek "
+            "başlatıldı. Devri tamamlamak için aşağıdaki doğrulama kodunu girin."
+        )
+        code_label = "Doğrulama kodunuz"
+        disclaimer = (
+            f"Bu kod {ttl_minutes} dakika içinde geçersiz olacaktır. Bu isteği "
+            "siz yapmadıysanız, lütfen bu e-postayı dikkate almayın ve şifrenizi "
+            "değiştirin — yetkiniz aktarılmayacaktır."
+        )
+        footer_text = f"&copy; {project_name}. Tüm hakları saklıdır."
+        plain_text = (
+            f"{target_email} hesabına ana süperadmin devri için doğrulama "
+            f"kodunuz: {code} (Geçerlilik: {ttl_minutes} dakika)"
+        )
+    else:
+        subject = "Root Superadmin Transfer Verification Code"
+        greeting = "Hi there,"
+        message = (
+            "A request was started to transfer your root superadmin status to "
+            f"<strong>{target_email}</strong>. Enter the verification code below "
+            "to complete the transfer."
+        )
+        code_label = "Your verification code"
+        disclaimer = (
+            f"This code expires in {ttl_minutes} minutes. If you didn't request "
+            "this, ignore this email and change your password — your status will "
+            "not be transferred."
+        )
+        footer_text = f"&copy; {project_name}. All rights reserved."
+        plain_text = (
+            "Your verification code to transfer root superadmin to "
+            f"{target_email}: {code} (valid for {ttl_minutes} minutes)"
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{subject}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        @media only screen and (max-width: 620px) {{
+            .wrapper {{ padding: 20px !important; }}
+            .container {{ width: 100% !important; border-radius: 12px !important; overflow: hidden; }}
+            .content {{ padding: 32px 24px !important; }}
+            .header {{ padding: 32px 24px !important; }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;-webkit-font-smoothing:antialiased;">
+    <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:48px 0;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="width:600px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                    <tr>
+                        <td class="header" style="background-color:#ffffff;padding:40px 48px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                            <div style="display:inline-block;padding:12px;background-color:#eff6ff;border-radius:12px;margin-bottom:16px;">
+                                <span style="font-size:32px;">🛡️</span>
+                            </div>
+                            <h1 style="margin:0;font-size:24px;font-weight:700;color:#1e293b;letter-spacing:-0.5px;">{project_name}</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="content" style="padding:40px 48px;">
+                            <p style="margin:0 0 16px;font-size:16px;color:#334155;">{greeting}</p>
+                            <p style="margin:0 0 28px;font-size:15px;line-height:1.6;color:#475569;">{message}</p>
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;text-align:center;">{code_label}</p>
+                            <div style="margin:0 auto 28px;max-width:320px;background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:20px;text-align:center;">
+                                <span style="font-size:34px;font-weight:700;letter-spacing:10px;color:#1e293b;">{code}</span>
+                            </div>
+                            <p style="margin:0;font-size:13px;line-height:1.6;color:#94a3b8;">{disclaimer}</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px 48px;background-color:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">{project_name}</p>
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">{footer_text}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+    return {"subject": subject, "html": html, "plain_text": plain_text}
+
+
+def generate_account_locked_email(
+    project_name: str, lock_minutes: int, lang: str = Language.EN
+) -> dict[str, str]:
+    """Generate subject, HTML, and plain text for an account-lockout alert.
+
+    Sent when an account is temporarily locked after too many failed logins.
+    Deliberately link-free: it only informs the user the lock is automatic and
+    time-limited, and prompts a password reset if the attempts were not theirs.
+    """
+    if lang == Language.TR:
+        subject = "Hesabınız geçici olarak kilitlendi"
+        greeting = "Merhaba,"
+        message = (
+            "Çok sayıda başarısız giriş denemesi nedeniyle hesabınız güvenlik "
+            f"amacıyla {lock_minutes} dakika boyunca geçici olarak kilitlendi. "
+            "Bu süre sonunda otomatik olarak tekrar giriş yapabilirsiniz."
+        )
+        disclaimer = (
+            "Bu denemeler size ait değilse, giriş sayfasındaki 'Şifremi Unuttum' "
+            "bağlantısı ile şifrenizi sıfırlamanızı öneririz."
+        )
+        footer_text = f"&copy; {project_name}. Tüm hakları saklıdır."
+        plain_text = (
+            "Çok sayıda başarısız giriş denemesi nedeniyle hesabınız "
+            f"{lock_minutes} dakika boyunca geçici olarak kilitlendi. Bu denemeler "
+            "size ait değilse, giriş sayfasındaki 'Şifremi Unuttum' bağlantısı ile "
+            "şifrenizi sıfırlayın."
+        )
+    else:
+        subject = "Your account has been temporarily locked"
+        greeting = "Hi there,"
+        message = (
+            "For your security, your account has been temporarily locked for "
+            f"{lock_minutes} minutes after too many failed login attempts. You "
+            "will be able to sign in again automatically once this period ends."
+        )
+        disclaimer = (
+            "If these attempts weren't you, we recommend resetting your password "
+            "using the 'Forgot Password' link on the login page."
+        )
+        footer_text = f"&copy; {project_name}. All rights reserved."
+        plain_text = (
+            "For your security, your account has been temporarily locked for "
+            f"{lock_minutes} minutes after too many failed login attempts. If these "
+            "attempts weren't you, reset your password using the 'Forgot Password' "
+            "link on the login page."
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{subject}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        @media only screen and (max-width: 620px) {{
+            .wrapper {{ padding: 20px !important; }}
+            .container {{ width: 100% !important; border-radius: 12px !important; overflow: hidden; }}
+            .content {{ padding: 32px 24px !important; }}
+            .header {{ padding: 32px 24px !important; }}
+        }}
+    </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;-webkit-font-smoothing:antialiased;">
+    <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:48px 0;">
+        <tr>
+            <td align="center">
+                <table class="container" width="600" cellpadding="0" cellspacing="0" style="width:600px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+                    <tr>
+                        <td class="header" style="background-color:#ffffff;padding:40px 48px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                            <div style="display:inline-block;padding:12px;background-color:#fef2f2;border-radius:12px;margin-bottom:16px;">
+                                <span style="font-size:32px;">🔒</span>
+                            </div>
+                            <h1 style="margin:0;font-size:24px;font-weight:700;color:#1e293b;letter-spacing:-0.5px;">{project_name}</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="content" style="padding:40px 48px;">
+                            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#0f172a;">{greeting}</p>
+                            <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#475569;">{message}</p>
+                            <div style="padding:20px;background-color:#fef2f2;border-radius:12px;border-left:4px solid #ef4444;">
+                                <p style="margin:0;font-size:13px;line-height:1.6;color:#b91c1c;font-style:italic;">{disclaimer}</p>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px 48px;background-color:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">{project_name}</p>
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">{footer_text}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>"""
+
+    return {"subject": subject, "html": html, "plain_text": plain_text}
