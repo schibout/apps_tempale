@@ -5,13 +5,14 @@ on its dependency) nor listed below fails this test. Fix the route, not the list
 unless the route is genuinely outside RBAC.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
+from fastapi import Depends, FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, APIWebSocketRoute
-from starlette.routing import Route
+from starlette.routing import BaseRoute, Route
 
-from app.api.deps import get_current_superadmin
+from app.api.deps import get_current_superadmin, require_user_permission
 from app.main import app
 from app.schemas.admin_permission import Permission
 
@@ -80,6 +81,7 @@ WEBSOCKET_PERMISSIONS: dict[str, str | None] = {
 
 
 def _dependants(dependant: Dependant) -> Iterator[Dependant]:
+    """Walk a route's dependency tree, depth first."""
     for sub in dependant.dependencies:
         yield sub
         yield from _dependants(sub)
@@ -97,22 +99,25 @@ def _permissions(route: APIRoute) -> list[Permission]:
 
 
 def _is_superadmin_only(route: APIRoute) -> bool:
+    """Return whether the route depends on ``get_current_superadmin``."""
     return any(
         sub.call is get_current_superadmin for sub in _dependants(route.dependant)
     )
 
 
 def _http_endpoints(route: APIRoute | Route) -> list[Endpoint]:
+    """List the method and path pairs a route serves, without HEAD and OPTIONS."""
     methods = sorted((route.methods or set()) - {"HEAD", "OPTIONS"})
     return [(method, route.path) for method in methods]
 
 
-def test_every_http_route_is_classified() -> None:
+def _classification_problems(routes: Iterable[BaseRoute]) -> list[str]:
+    """Return why each given route breaks the classification rules."""
     problems: list[str] = []
     seen_socle: set[Endpoint] = set()
     seen_superadmin: set[Endpoint] = set()
 
-    for route in app.routes:
+    for route in routes:
         if isinstance(route, APIWebSocketRoute):
             continue
         if not isinstance(route, (APIRoute, Route)):
@@ -123,7 +128,8 @@ def test_every_http_route_is_classified() -> None:
         for endpoint in _http_endpoints(route):
             label = f"{endpoint[0]} {endpoint[1]}"
             if is_admin:
-                if permissions:
+                # A ``self.*`` key guards nothing here: any account may hold one.
+                if any(not p.startswith("self.") for p in permissions):
                     continue
                 if endpoint in SUPERADMIN_ONLY_ROUTES:
                     seen_superadmin.add(endpoint)
@@ -132,7 +138,7 @@ def test_every_http_route_is_classified() -> None:
                             f"{label}: listed superadmin-only but not guarded"
                         )
                 else:
-                    problems.append(f"{label}: admin route without a permission")
+                    problems.append(f"{label}: admin route without an admin permission")
             elif endpoint in SOCLE_ROUTES:
                 seen_socle.add(endpoint)
             elif permissions and all(p.startswith("self.") for p in permissions):
@@ -145,9 +151,34 @@ def test_every_http_route_is_classified() -> None:
         f"stale SUPERADMIN_ONLY_ROUTES entry {e}"
         for e in set(SUPERADMIN_ONLY_ROUTES) - seen_superadmin
     ]
+    return problems
+
+
+def test_every_http_route_is_classified() -> None:
+    """Every route of the app is guarded by a permission or explicitly listed."""
+    problems = _classification_problems(app.routes)
     assert not problems, "\n".join(sorted(problems))
 
 
+def test_admin_route_labelled_only_with_a_self_key_is_refused() -> None:
+    """A ``self.*`` key does not guard an admin route: any account may hold it."""
+    probe = FastAPI()
+
+    @probe.get(
+        f"{PREFIX}/admin/probe",
+        dependencies=[Depends(require_user_permission(Permission.SELF_PROFILE_UPDATE))],
+    )
+    def admin_probe() -> None:
+        """Stand in for an admin route guarded by a self-service key."""
+
+    problems = _classification_problems(probe.routes)
+
+    assert f"GET {PREFIX}/admin/probe: admin route without an admin permission" in (
+        problems
+    )
+
+
 def test_every_websocket_route_is_classified() -> None:
+    """Every socket of the app is listed with its permission."""
     paths = {r.path for r in app.routes if isinstance(r, APIWebSocketRoute)}
     assert paths == set(WEBSOCKET_PERMISSIONS)
