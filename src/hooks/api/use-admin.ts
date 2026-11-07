@@ -15,6 +15,8 @@ import type {
 import type { SessionListParams } from "@/lib/types/session";
 import { useAuthStore } from "@/stores/auth.store";
 
+import { rbacKeys } from "./rbac-keys";
+
 // Each resource type owns a distinct top-level segment so prefix-invalidation
 // never accidentally fans out across resources. `usersList` ≠ `user` ≠
 // `userActivities` — invalidating one leaves the others untouched.
@@ -202,8 +204,12 @@ export const useSetAdminPermissions = () => {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: AdminPermissionsUpdatePayload }) =>
       adminApi.setAdminPermissions(id, payload),
-    onSuccess: () => {
+    // Emptying the grants can demote the account: its tier shows on all of these.
+    onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.adminsPrefix });
+      invalidateUserSurfaces(queryClient);
+      queryClient.invalidateQueries({ queryKey: adminKeys.user(id) });
+      queryClient.invalidateQueries({ queryKey: rbacKeys.access(id) });
     },
   });
 };

@@ -129,3 +129,12 @@ export interface UserAccess {
   direct_permissions: Permission[];
   effective: EffectivePermission[];
 }
+
+// Whether any of these assignments still gives the account admin access.
+export const hasActiveAdminAssignment = (items: Assignment[], now: number): boolean =>
+  items.some(
+    (item) =>
+      item.audience === RbacAudience.Admin &&
+      !item.expired &&
+      (item.expires_at === null || new Date(item.expires_at).getTime() > now),
+  );

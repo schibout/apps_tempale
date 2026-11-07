@@ -3,11 +3,11 @@
 import { useState } from "react";
 
 import { Modal } from "antd";
-import { TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { ApiErrorNote } from "@/components/admin/rbac/ApiErrorNote";
 import { AudienceBadge } from "@/components/admin/rbac/AudienceBadge";
+import { TierWarning } from "@/components/admin/users/TierWarning";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useSetUserPermissionSets, useSetUserRoles } from "@/hooks/api/use-rbac";
 import {
   RbacAudience,
+  hasActiveAdminAssignment,
   type Assignment,
   type AssignmentItem,
   type UserAccess,
@@ -67,9 +68,6 @@ const toLocalInput = (iso: string | null): string => {
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-
-const isActive = (expiresAt: string | null, now: number): boolean =>
-  expiresAt === null || new Date(expiresAt).getTime() > now;
 
 const toItem = (id: string, row: Row): AssignmentItem => ({
   id,
@@ -135,10 +133,7 @@ function AssignBody({
   );
 
   const promotes = access.account_role === SystemRole.USER && activeAdminChosen;
-  const otherKeepsAdminAccess = other.some(
-    (item) =>
-      item.audience === RbacAudience.Admin && !item.expired && isActive(item.expires_at, now),
-  );
+  const otherKeepsAdminAccess = hasActiveAdminAssignment(other, now);
   const demotes =
     access.account_role === SystemRole.ADMIN &&
     !activeAdminChosen &&
@@ -239,19 +234,6 @@ function AssignBody({
           {mutation.isPending ? t("rbac.saving") : t("rbac.access.assign.save")}
         </Button>
       </div>
-    </div>
-  );
-}
-
-function TierWarning({ text, testId }: { text: string; testId: string }) {
-  return (
-    <div
-      role="status"
-      data-testid={`assign-warning-${testId}`}
-      className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
-    >
-      <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-      <p>{text}</p>
     </div>
   );
 }

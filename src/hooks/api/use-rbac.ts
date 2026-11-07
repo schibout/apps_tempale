@@ -10,16 +10,10 @@ import type {
   UserAccess,
 } from "@/lib/types/rbac";
 
+import { rbacKeys } from "./rbac-keys";
 import { adminKeys } from "./use-admin";
 
-export const rbacKeys = {
-  all: ["admin", "rbac"] as const,
-  catalog: ["admin", "rbac", "catalog"] as const,
-  roles: ["admin", "rbac", "roles"] as const,
-  permissionSets: ["admin", "rbac", "permissionSets"] as const,
-  accessPrefix: ["admin", "rbac", "access"] as const,
-  access: (userId: string) => ["admin", "rbac", "access", userId] as const,
-};
+export { rbacKeys };
 
 type QueryClient = ReturnType<typeof useQueryClient>;
 

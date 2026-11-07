@@ -1,19 +1,23 @@
+import { QueryClient } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, it, expect, vi } from "vitest";
 
 import {
+  adminKeys,
   useAdminActivities,
   useAdminUser,
   useAdminUserActivities,
   useAdminUsers,
   useChangeAdminUserPassword,
   useDeleteAdminUser,
+  useSetAdminPermissions,
   useSuspendAdminUser,
   useUnlockAdminUser,
   useUnsuspendAdminUser,
   useUpdateAdminUser,
 } from "@/hooks/api/use-admin";
+import { rbacKeys } from "@/hooks/api/use-rbac";
 import type { AdminActivity, AdminUser } from "@/lib/types/admin";
 import { SystemRole } from "@/lib/types/user";
 import { server } from "@/test/msw/server";
@@ -51,6 +55,37 @@ const mockActivity: AdminActivity = {
   user_agent: "test",
   created_at: "2026-04-19T12:00:00Z",
 };
+
+describe("useSetAdminPermissions", () => {
+  it("refreshes the admin lists, the user surfaces, the detail and the access view", async () => {
+    server.use(
+      http.patch("*/api/v1/admin/admins/admin-1/permissions", () =>
+        HttpResponse.json({ message: "ok" }),
+      ),
+    );
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(() => useSetAdminPermissions(), {
+      wrapper: createWrapper(client),
+    });
+
+    result.current.mutate({ id: "admin-1", payload: { permissions: [] } });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    const invalidated = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(invalidated).toEqual(
+      expect.arrayContaining([
+        adminKeys.adminsPrefix,
+        adminKeys.usersListPrefix,
+        adminKeys.stats,
+        adminKeys.user("admin-1"),
+        rbacKeys.access("admin-1"),
+      ]),
+    );
+  });
+});
 
 describe("useAdminUsers", () => {
   it("fetches and returns the users list with total", async () => {
