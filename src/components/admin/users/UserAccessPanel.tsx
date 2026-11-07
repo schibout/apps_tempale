@@ -137,7 +137,7 @@ export function UserAccessPanel({ user, isSelf }: UserAccessPanelProps) {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={rolesQuery.isLoading}
+                disabled={rolesQuery.isLoading || rolesQuery.isError}
                 onClick={() => {
                   setAssigning("roles");
                 }}
@@ -146,6 +146,9 @@ export function UserAccessPanel({ user, isSelf }: UserAccessPanelProps) {
               </Button>
             ) : null}
           </div>
+          {canAssignRoles && rolesQuery.isError ? (
+            <PermissionNote text={t("rbac.access.assign.listError")} />
+          ) : null}
           <AssignmentList items={access.roles} />
         </section>
 
@@ -156,7 +159,7 @@ export function UserAccessPanel({ user, isSelf }: UserAccessPanelProps) {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={setsQuery.isLoading}
+                disabled={setsQuery.isLoading || setsQuery.isError}
                 onClick={() => {
                   setAssigning("sets");
                 }}
@@ -165,6 +168,9 @@ export function UserAccessPanel({ user, isSelf }: UserAccessPanelProps) {
               </Button>
             ) : null}
           </div>
+          {canAssignSets && setsQuery.isError ? (
+            <PermissionNote text={t("rbac.access.assign.listError")} />
+          ) : null}
           <AssignmentList items={access.permission_sets} />
         </section>
 
@@ -230,7 +236,7 @@ export function UserAccessPanel({ user, isSelf }: UserAccessPanelProps) {
         </section>
       </CardContent>
 
-      {assigning ? (
+      {assigning && !(assigning === "roles" ? rolesQuery : setsQuery).isError ? (
         <UserAccessAssignModal
           kind={assigning}
           open

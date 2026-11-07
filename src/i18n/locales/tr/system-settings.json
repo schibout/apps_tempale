@@ -48,6 +48,7 @@
       "description": "Uygulama genelinde ve e-postalarda gösterilen ürün adı."
     },
     "logo_url": {
+      "uploadRestricted": "Dosya yükleme izniniz olmadığı için logo değiştirilemez.",
       "label": "Logo",
       "description": "Site logosu. Depolamaya yüklenir; URL'i burada saklanır."
     },

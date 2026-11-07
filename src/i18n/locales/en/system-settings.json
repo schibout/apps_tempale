@@ -48,6 +48,7 @@
       "description": "Product name shown across the app and emails."
     },
     "logo_url": {
+      "uploadRestricted": "You can't upload files, so the logo can't be replaced.",
       "label": "Logo",
       "description": "Site logo. Uploaded to storage; the URL is saved here."
     },

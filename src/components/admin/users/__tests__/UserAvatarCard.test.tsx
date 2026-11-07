@@ -1,12 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 
 import { UserAvatarCard } from "@/components/admin/users/UserAvatarCard";
 import type { AdminUser } from "@/lib/types/admin";
 import type { FilePublic } from "@/lib/types/file";
+import { Permission } from "@/lib/types/permissions";
 import { SystemRole } from "@/lib/types/user";
+import { useAuthStore } from "@/stores/auth.store";
+import { createMockUser } from "@/test/msw/handlers";
 import { server } from "@/test/msw/server";
 import { renderWithProviders } from "@/test/test-utils";
 
@@ -37,7 +40,34 @@ const userWithAvatar: AdminUser = {
   avatar_file: avatar,
 };
 
+const RESTRICTED = "admin:userDetail.avatarUploadRestricted";
+
+afterEach(() => {
+  useAuthStore.setState({ user: null, isAuthenticated: false });
+});
+
 describe("UserAvatarCard", () => {
+  it("disables the picker and explains why without self.files:upload, keeping Remove", () => {
+    useAuthStore.setState({ user: createMockUser({ permissions: [Permission.UsersWrite] }) });
+
+    renderWithProviders(<UserAvatarCard user={userWithAvatar} />);
+
+    expect(screen.getByRole("button", { name: /upload:replace/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /upload:remove/ })).toBeEnabled();
+    expect(screen.getByText(RESTRICTED)).toBeInTheDocument();
+  });
+
+  it("keeps the picker enabled with self.files:upload", () => {
+    useAuthStore.setState({
+      user: createMockUser({ permissions: [Permission.UsersWrite, Permission.SelfFilesUpload] }),
+    });
+
+    renderWithProviders(<UserAvatarCard user={userWithAvatar} />);
+
+    expect(screen.getByRole("button", { name: /upload:replace/ })).toBeEnabled();
+    expect(screen.queryByText(RESTRICTED)).not.toBeInTheDocument();
+  });
+
   it("does not show the confirm modal until remove is clicked", () => {
     renderWithProviders(<UserAvatarCard user={userWithAvatar} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

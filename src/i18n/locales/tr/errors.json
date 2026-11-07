@@ -66,6 +66,7 @@
       "admin_assignment_forbidden": "Bir kullanıcıya admin rolü veya izin seti atamak için admins:write izni gerekir.",
       "duplicate_assignment": "Aynı rol veya izin seti birden fazla kez yer alıyor.",
       "expiry_in_past": "Bitiş tarihi gelecekte olmalıdır.",
+      "self_permission_roles_only": "Self-servis izinleri yalnızca roller aracılığıyla verilebilir.",
       "privilege_escalation": "Yalnızca kalıcı olarak sahip olduğunuz yetkileri verebilir veya geri alabilirsiniz. Geçici yetkiler aktarılamaz."
     },
     "notification": {

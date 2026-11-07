@@ -66,6 +66,7 @@
       "admin_assignment_forbidden": "Assigning an admin role or permission set to a user requires the admins:write permission.",
       "duplicate_assignment": "The same role or permission set appears more than once.",
       "expiry_in_past": "The expiry date must be in the future.",
+      "self_permission_roles_only": "Self-service permissions can only be granted through roles.",
       "privilege_escalation": "You can only grant or withdraw permissions you hold permanently. Temporary permissions cannot be passed on."
     },
     "notification": {

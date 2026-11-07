@@ -3,9 +3,11 @@
 import { Input, InputNumber, Select, Spin, Switch } from "antd";
 import { useTranslation } from "react-i18next";
 
+import { PermissionNote } from "@/components/admin/shared/PermissionNote";
 import { AvatarUpload } from "@/components/common/file-upload";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCanUploadOwnFiles } from "@/hooks/use-permissions";
 import { FILE_CATEGORY } from "@/lib/types/file";
 import type { SettingCategory, SettingRead, SettingValue } from "@/lib/types/system-settings";
 
@@ -37,6 +39,7 @@ export function SystemSettingsForm({
   onSave,
 }: SystemSettingsFormProps) {
   const { t } = useTranslation("systemSettings");
+  const canUpload = useCanUploadOwnFiles();
 
   if (loading) {
     return (
@@ -59,16 +62,22 @@ export function SystemSettingsForm({
     if (setting.key === "logo_url") {
       const url = typeof value === "string" ? value : "";
       return (
-        <AvatarUpload
-          value={url ? { url } : null}
-          onChange={(file) => {
-            onLogoSave(file?.url ?? "");
-          }}
-          category={FILE_CATEGORY.BRANDING_LOGO}
-          shape="square"
-          fit="contain"
-          disabled={disabled}
-        />
+        <div className="space-y-3">
+          <AvatarUpload
+            value={url ? { url } : null}
+            onChange={(file) => {
+              onLogoSave(file?.url ?? "");
+            }}
+            category={FILE_CATEGORY.BRANDING_LOGO}
+            shape="square"
+            fit="contain"
+            disabled={disabled || !canUpload}
+            removeDisabled={disabled}
+          />
+          {canWrite && !canUpload ? (
+            <PermissionNote text={t("fields.logo_url.uploadRestricted")} />
+          ) : null}
+        </div>
       );
     }
     if (setting.key === "default_locale") {

@@ -37,7 +37,7 @@ export const canMutateTarget = (role: SystemRole, tier: AdminTierCaps): boolean 
 
 /**
  * The row/danger-zone caps narrowed to one target. For an admin-tier target every
- * mutation needs admins:write, and delete also needs admins:delete.
+ * mutation needs admins:write, except delete, which needs admins:delete instead.
  */
 export const capsForTarget = (
   caps: UserActionCaps,
@@ -46,10 +46,11 @@ export const capsForTarget = (
 ): UserActionCaps => {
   if (role === SystemRole.USER) return caps;
   const mutable = canMutateTarget(role, tier);
+  const reachable = role !== SystemRole.SUPERADMIN || tier.isViewerSuperadmin;
   return {
     canSuspend: caps.canSuspend && mutable,
     canResetPassword: caps.canResetPassword && mutable,
     canUnlock: caps.canUnlock && mutable,
-    canDelete: caps.canDelete && mutable && tier.canDeleteAdmins,
+    canDelete: caps.canDelete && reachable && tier.canDeleteAdmins,
   };
 };

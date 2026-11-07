@@ -124,6 +124,18 @@ afterEach(() => {
 });
 
 describe("UserAccessPanel", () => {
+  it.each([
+    ["roles", "*/api/v1/admin/rbac/roles", "admin:rbac.access.manageRoles"],
+    ["sets", "*/api/v1/admin/rbac/permission-sets", "admin:rbac.access.manageSets"],
+  ])("blocks managing %s when their list fails to load", async (_kind, url, button) => {
+    viewer(SystemRole.ADMIN, FULL);
+    server.use(http.get(url, () => new HttpResponse(null, { status: 500 })));
+    renderWithProviders(<UserAccessPanel user={baseUser} isSelf={false} />);
+
+    expect(await screen.findByText("admin:rbac.access.assign.listError")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: button })).toBeDisabled();
+  });
+
   it("shows where each effective permission comes from", async () => {
     viewer(SystemRole.ADMIN, FULL);
     renderWithProviders(<UserAccessPanel user={baseUser} isSelf={false} />);
