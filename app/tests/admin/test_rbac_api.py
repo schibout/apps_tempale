@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from fakeredis.aioredis import FakeRedis
 from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import select, update
 from sqlalchemy.dialects import postgresql
@@ -1905,3 +1906,35 @@ async def test_assignment_reports_a_role_deleted_meanwhile(root: AsyncClient):
         )
 
     _assert_refused(response, 404, ErrorMessages.RBAC_ROLE_NOT_FOUND)
+
+
+async def test_role_edit_reaches_an_account_with_a_cached_entry(
+    root: AsyncClient, make_client: MakeClient, fake_redis: FakeRedis
+):
+    """Editing a role changes its holder's next read through real invalidation."""
+    holder = await make_client("holder@test.com")
+    created = await root.post(
+        ROLES, json=_role_payload(permission_set_ids=[await _set_id("users.read")])
+    )
+    assert created.status_code == 201, created.text
+    role = created.json()
+    target = uuid.UUID(await get_user_id("holder@test.com"))
+    assigned = await root.put(
+        f"/admin/users/{target}/roles",
+        json=await _assignments(DEFAULT_USER_ROLE_KEY, role["key"]),
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    before = (await holder.get("/users/me")).json()["permissions"]
+    assert Permission.USERS_READ.value in before
+    assert await fake_redis.keys(f"perms:*:{target}"), "the read must fill the cache"
+
+    edited = await root.patch(
+        f"{ROLES}/{role['id']}",
+        json={"permission_set_ids": [await _set_id("users.suspend")]},
+    )
+    assert edited.status_code == 200, edited.text
+
+    after = (await holder.get("/users/me")).json()["permissions"]
+    assert Permission.USERS_READ.value not in after
+    assert Permission.USERS_SUSPEND.value in after

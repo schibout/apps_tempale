@@ -820,3 +820,39 @@ async def test_users_me_still_omits_the_list_for_superadmin(client: AsyncClient)
     await _root_client(client)
 
     assert "permissions" not in (await client.get("/users/me")).json()
+
+
+async def test_deleting_the_assigning_admin_clears_assigned_by():
+    """Assignments outlive the admin who made them, without a reference to it."""
+    assigner = await _make_user(SystemRole.ADMIN)
+    holder = await _make_user()
+    role_id = await _role_id("support_agent")
+    set_id = await _set_id("users.read")
+    async with TestingSessionLocal() as session:
+        session.add_all(
+            [
+                RbacUserRole(
+                    user_id=holder.id, role_id=role_id, assigned_by=assigner.id
+                ),
+                RbacUserPermissionSet(
+                    user_id=holder.id, set_id=set_id, assigned_by=assigner.id
+                ),
+            ]
+        )
+        await session.commit()
+
+    async with TestingSessionLocal() as session:
+        await session.execute(delete(User).where(User.id == assigner.id))
+        await session.commit()
+
+    async with TestingSessionLocal() as session:
+        role_row = await session.execute(
+            select(RbacUserRole).where(RbacUserRole.user_id == holder.id)
+        )
+        set_row = await session.execute(
+            select(RbacUserPermissionSet).where(
+                RbacUserPermissionSet.user_id == holder.id
+            )
+        )
+        assert role_row.scalars().one().assigned_by is None
+        assert set_row.scalars().one().assigned_by is None
