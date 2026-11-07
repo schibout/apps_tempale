@@ -3,6 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.messages.error_message import ErrorMessages
 from app.schemas.admin_permission import Permission, is_self_permission
 from app.schemas.common import ActivityDetails
 from app.schemas.file import FileCategory, FilePublic
@@ -212,7 +213,7 @@ class AdminListResponse(BaseModel):
 def _reject_self_permissions(permissions: list[Permission]) -> list[Permission]:
     """Reject ``self.*`` keys, which are reserved for roles."""
     if any(is_self_permission(perm) for perm in permissions):
-        raise ValueError("self.* permissions can only be granted through roles")
+        raise ValueError(ErrorMessages.RBAC_SELF_PERMISSION_ROLES_ONLY)
     return permissions
 
 

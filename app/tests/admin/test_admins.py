@@ -346,3 +346,24 @@ async def test_admin_with_every_permission_reads_the_admin_list(
     """Reading the admin list follows ``admins:read``, not the superadmin tier."""
     response = await admin_client.get("/admin/admins")
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_create_admin_refuses_self_keys_with_a_message_key(
+    superadmin_client: AsyncClient,
+):
+    """A ``self.*`` key is refused with the centralised message, not inline text."""
+    response = await superadmin_client.post(
+        "/admin/admins",
+        json={
+            "email": "selfkey@test.com",
+            "password": "Password123!",
+            "permissions": [Permission.SELF_PROFILE_UPDATE.value],
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert (
+        ErrorMessages.RBAC_SELF_PERMISSION_ROLES_ONLY
+        in (response.json()["details"][0]["error_key"])
+    )

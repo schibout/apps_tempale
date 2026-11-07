@@ -254,8 +254,10 @@ async def delete_admin_audience_assignments(
 ) -> None:
     """Remove an account's non-``user`` roles and sets, in the caller's transaction.
 
-    Flushes without committing, so a tier change and this removal land together.
-    The ``user``-audience assignments stay: an account keeps its self-service keys
+    Flushes without committing: the removal lands with the caller's next commit.
+    A tier change lands with it only if the caller stages it before that commit,
+    which callers committing grants first through ``set_user_permissions`` do not
+    do. The ``user``-audience assignments stay: an account keeps its self-service keys
     whatever its tier.
     """
     admin_roles = select(RbacRole.id).where(

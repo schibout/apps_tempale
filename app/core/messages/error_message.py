@@ -73,6 +73,7 @@ class ErrorMessages:
     RBAC_ADMIN_ASSIGNMENT_FORBIDDEN = "error.rbac.admin_assignment_forbidden"
     RBAC_DUPLICATE_ASSIGNMENT = "error.rbac.duplicate_assignment"
     RBAC_EXPIRY_IN_PAST = "error.rbac.expiry_in_past"
+    RBAC_SELF_PERMISSION_ROLES_ONLY = "error.rbac.self_permission_roles_only"
 
     # File / upload
     FILE_NOT_FOUND = "error.file.not_found"
