@@ -1,5 +1,6 @@
 import { test, expect } from "../base-test";
 import { LOCALES, getStrings, reEscape } from "../i18n-strings";
+import { SELF_PERMISSIONS } from "../user-fixtures";
 
 for (const locale of LOCALES) {
   const s = getStrings(locale);
@@ -23,7 +24,12 @@ for (const locale of LOCALES) {
           body: JSON.stringify({
             access_token: "fake-jwt-token",
             token_type: "bearer",
-            user: { id: "1", email: "test@example.com", first_name: "Test" },
+            user: {
+              id: "1",
+              email: "test@example.com",
+              first_name: "Test",
+              permissions: SELF_PERMISSIONS,
+            },
           }),
         });
       });
@@ -32,7 +38,12 @@ for (const locale of LOCALES) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ id: "1", email: "test@example.com", first_name: "Test" }),
+          body: JSON.stringify({
+            id: "1",
+            email: "test@example.com",
+            first_name: "Test",
+            permissions: SELF_PERMISSIONS,
+          }),
         });
       });
 

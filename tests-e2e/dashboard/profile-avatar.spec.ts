@@ -1,5 +1,6 @@
 import { test, expect } from "../base-test";
 import { LOCALES, getStrings, type Locale } from "../i18n-strings";
+import { SELF_PERMISSIONS } from "../user-fixtures";
 
 import type { Page } from "@playwright/test";
 
@@ -8,6 +9,7 @@ const baseUser = {
   email: "john@example.com",
   first_name: "John",
   last_name: "Doe",
+  permissions: SELF_PERMISSIONS,
 };
 
 const avatarFile = {

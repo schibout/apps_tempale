@@ -1,9 +1,11 @@
 import { type BrowserContext, type Page } from "@playwright/test";
 
+import type { Permission } from "@/lib/types/permissions";
 import { SystemRole } from "@/lib/types/user";
 
 import { test, expect } from "../base-test";
 import { LOCALES, getStrings, reEscape, type Locale } from "../i18n-strings";
+import { SELF_PERMISSIONS } from "../user-fixtures";
 
 /**
  * Covers the self-deactivation grace-period flow end-to-end:
@@ -29,6 +31,7 @@ interface MockUser {
   title: string | null;
   deactivated_at: string | null;
   deletion_scheduled_at: string | null;
+  permissions: Permission[];
 }
 
 const baseUser: MockUser = {
@@ -44,6 +47,7 @@ const baseUser: MockUser = {
   title: null,
   deactivated_at: null,
   deletion_scheduled_at: null,
+  permissions: SELF_PERMISSIONS,
 };
 
 const seedAuthedSession = async (context: BrowserContext, user: MockUser, locale: Locale) => {

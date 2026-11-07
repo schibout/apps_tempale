@@ -3,6 +3,8 @@ import type { AdminFileListItem } from "@/lib/types/file";
 import { Permission } from "@/lib/types/permissions";
 import { SystemRole } from "@/lib/types/user";
 
+import { SELF_PERMISSIONS } from "../user-fixtures";
+
 import type { Locale } from "./admin-strings";
 import type { Page } from "@playwright/test";
 
@@ -75,8 +77,7 @@ export const regularUser: AdminUser = {
   deactivated_at: null,
   deletion_scheduled_at: null,
   suspended_at: null,
-  // The default role: every self-service key, as `/users/me` lists it.
-  permissions: ALL_PERMISSIONS.filter((p) => p.startsWith("self.")),
+  permissions: SELF_PERMISSIONS,
 };
 
 export const injectSession = async (
@@ -152,6 +153,7 @@ export const mockAdminStats = async (
     users_verified: number;
     users_admins: number;
     activities_total: number;
+    activities_today: number;
   }> = {},
 ): Promise<void> => {
   const payload = JSON.stringify({
@@ -160,6 +162,7 @@ export const mockAdminStats = async (
     users_verified: 0,
     users_admins: 0,
     activities_total: 0,
+    activities_today: 0,
     ...stats,
   });
   await page.route(/.*\/api\/v1\/admin\/stats$/, async (route) => {

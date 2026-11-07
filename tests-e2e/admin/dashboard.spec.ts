@@ -19,6 +19,7 @@ const mockStatsResponse = async (
     users_verified: number;
     users_admins: number;
     activities_total: number;
+    activities_today: number;
   },
 ): Promise<void> => {
   await page.route(/.*\/api\/v1\/admin\/stats$/, async (route) => {
@@ -42,7 +43,8 @@ for (const locale of LOCALES) {
         users_active: 37,
         users_verified: 28,
         users_admins: 3,
-        activities_total: 119,
+        activities_total: 500,
+        activities_today: 119,
       });
       await mockAdminActivities(page);
 
@@ -53,6 +55,8 @@ for (const locale of LOCALES) {
       await expect(page.getByText("37", { exact: true })).toBeVisible();
       await expect(page.getByText("3", { exact: true })).toBeVisible();
       await expect(page.getByText("119", { exact: true })).toBeVisible();
+      // The activity card reports today's count, not the all-time total.
+      await expect(page.getByText("500", { exact: true })).toHaveCount(0);
     });
 
     test("quick-action buttons navigate to users and activities", async ({ page }) => {
@@ -64,6 +68,7 @@ for (const locale of LOCALES) {
         users_verified: 2,
         users_admins: 1,
         activities_total: 0,
+        activities_today: 0,
       });
       await mockAdminUsersList(page, [adminUser, regularUser], 2);
       await mockAdminActivities(page);

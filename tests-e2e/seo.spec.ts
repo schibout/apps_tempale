@@ -1,6 +1,7 @@
 import { type Page } from "@playwright/test";
 
 import { test, expect } from "./base-test";
+import { SELF_PERMISSIONS } from "./user-fixtures";
 
 // Helper to inject authenticated state into both the API and cookies
 const setupAuthenticatedState = async (page: Page) => {
@@ -9,6 +10,7 @@ const setupAuthenticatedState = async (page: Page) => {
     email: "john@example.com",
     first_name: "John",
     last_name: "Doe",
+    permissions: SELF_PERMISSIONS,
   };
 
   await page.route("**/api/v1/users/me", async (route) => {

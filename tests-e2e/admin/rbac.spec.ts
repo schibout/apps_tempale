@@ -175,12 +175,32 @@ for (const locale of LOCALES) {
       await expect(page.getByText(s.admins.create.passwordLabel, { exact: true })).toBeVisible();
     });
 
-    test("a plain admin cannot open the superadmin-only Admins page", async ({ page }) => {
-      await injectSession(page, adminUser, locale);
-      await mockMe(page, adminUser);
+    test("an admin without admins:read cannot open the Admins page", async ({ page }) => {
+      // Holds every other key, so only admins:read can explain the refusal.
+      const withoutAdminsRead = makeAdmin(
+        (Object.values(Permission) as Permission[]).filter((p) => p !== Permission.AdminsRead),
+      );
+      await injectSession(page, withoutAdminsRead, locale);
+      await mockMe(page, withoutAdminsRead);
 
       await page.goto(`/${locale}/admin/admins`);
       await expect(page.getByText(s.permissionDenied.title)).toBeVisible();
+      await expect(page.getByRole("heading", { name: s.admins.title })).toHaveCount(0);
+    });
+
+    test("a plain admin holding admins:read opens the Admins page without write actions", async ({
+      page,
+    }) => {
+      const reader = makeAdmin([Permission.AdminsRead]);
+      await injectSession(page, reader, locale);
+      await mockMe(page, reader);
+      await mockAdminsList(page);
+      await mockPermissionCatalog(page);
+
+      await page.goto(`/${locale}/admin/admins`);
+      await expect(page.getByRole("heading", { name: s.admins.title })).toBeVisible();
+      await expect(page.getByText(s.permissionDenied.title)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: s.admins.create.action })).toHaveCount(0);
     });
 
     test("an admin visiting a user-area page is redirected into the admin panel", async ({
@@ -363,7 +383,10 @@ for (const locale of LOCALES) {
 
       await page.getByRole("button", { name: s.rbac.access.manageRoles }).click();
       await page.getByRole("checkbox", { name: /Premium/ }).check();
-      await page.locator('input[type="datetime-local"]').fill("2030-01-02T10:00");
+      // The held Member role has its own expiry input: target the one being assigned.
+      await page
+        .getByRole("textbox", { name: `${s.rbac.access.assign.expiresLabel} · Premium` })
+        .fill("2030-01-02T10:00");
       await page.getByRole("button", { name: s.rbac.access.assign.save }).click();
 
       await expect.poll(() => putBody).toContain('"id":"role-premium","expires_at":"');

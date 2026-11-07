@@ -1,5 +1,6 @@
 import { test, expect } from "../base-test";
 import { LOCALES, getStrings, reEscape, type Locale } from "../i18n-strings";
+import { SELF_PERMISSIONS } from "../user-fixtures";
 
 import type { Page } from "@playwright/test";
 
@@ -8,6 +9,7 @@ const mockUser = {
   email: "john@example.com",
   first_name: "John",
   last_name: "Doe",
+  permissions: SELF_PERMISSIONS,
 };
 
 const setupAuthenticatedState = async (page: Page, locale: Locale) => {
@@ -91,7 +93,8 @@ for (const locale of LOCALES) {
             status: 200,
             contentType: "application/json",
             body: JSON.stringify({
-              user: { id: "123", email: "john@example.com", first_name: "Johnny" },
+              // PATCH /users/me answers with the same payload as GET /users/me.
+              user: { ...mockUser, first_name: "Johnny" },
               message: "success.user.updated",
             }),
           });

@@ -1,5 +1,7 @@
 import { test as setup, expect } from "@playwright/test";
 
+import { SELF_PERMISSIONS } from "./user-fixtures";
+
 /**
  * Setup test that authenticates a user once and caches the storage state.
  * Other tests will use this cached state via storageState configuration.
@@ -28,6 +30,7 @@ setup("authenticate user", async ({ page }) => {
           email: "test@example.com",
           first_name: "Test",
           last_name: "User",
+          permissions: SELF_PERMISSIONS,
         },
       }),
     });
@@ -43,6 +46,7 @@ setup("authenticate user", async ({ page }) => {
         email: "test@example.com",
         first_name: "Test",
         last_name: "User",
+        permissions: SELF_PERMISSIONS,
       }),
     });
   });

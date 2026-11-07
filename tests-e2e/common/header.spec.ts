@@ -1,5 +1,6 @@
 import { test, expect } from "../base-test";
 import { LOCALES, getStrings, reEscape, type Locale } from "../i18n-strings";
+import { SELF_PERMISSIONS } from "../user-fixtures";
 
 import type { Page } from "@playwright/test";
 
@@ -9,6 +10,7 @@ const setupAuthenticatedState = async (page: Page, locale: Locale) => {
     email: "john@example.com",
     first_name: "John",
     last_name: "Doe",
+    permissions: SELF_PERMISSIONS,
   };
 
   await page.route("**/api/v1/users/me", async (route) => {

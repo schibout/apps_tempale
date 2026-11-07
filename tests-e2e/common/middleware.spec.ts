@@ -1,4 +1,5 @@
 import { test, expect } from "../base-test";
+import { SELF_PERMISSIONS } from "../user-fixtures";
 
 test.describe("Middleware - Locale Redirection", () => {
   test("should redirect root URL to localized default (en)", async ({ page }) => {
@@ -56,7 +57,7 @@ test.describe("Middleware - Authentication Guards", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: "1", email: "test@example.com" }),
+        body: JSON.stringify({ id: "1", email: "test@example.com", permissions: SELF_PERMISSIONS }),
       });
     });
 
@@ -95,7 +96,7 @@ test.describe("Middleware - Authenticated Access", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: "1", email: "test@example.com" }),
+        body: JSON.stringify({ id: "1", email: "test@example.com", permissions: SELF_PERMISSIONS }),
       });
     });
 
@@ -108,7 +109,7 @@ test.describe("Middleware - Authenticated Access", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: "1", email: "test@example.com" }),
+        body: JSON.stringify({ id: "1", email: "test@example.com", permissions: SELF_PERMISSIONS }),
       });
     });
 
