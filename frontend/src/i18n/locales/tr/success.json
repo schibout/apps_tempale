@@ -1,0 +1,64 @@
+{
+  "success": {
+    "user": {
+      "deleted": "Kullanıcı başarıyla silindi.",
+      "created": "Kullanıcı başarıyla oluşturuldu.",
+      "updated": "Kullanıcı başarıyla güncellendi.",
+      "email_verified": "E-posta başarıyla doğrulandı.",
+      "verification_email_sent": "Doğrulama e-postası gönderildi."
+    },
+    "auth": {
+      "login": "Başarıyla giriş yapıldı.",
+      "password_reset_sent": "Şifre sıfırlama bağlantısı gönderildi.",
+      "password_reset_success": "Şifre başarıyla sıfırlandı.",
+      "password_change_success": "Şifre başarıyla değiştirildi. Lütfen tekrar giriş yapın.",
+      "logout_success": "Başarıyla çıkış yapıldı.",
+      "register_success": "Başarıyla kayıt oldunuz. Lütfen e-postanızı doğrulayın."
+    },
+    "account": {
+      "deactivated": "Hesabınız devre dışı bırakıldı. Geri almazsanız 30 gün sonra silinecek.",
+      "reactivated": "Tekrar hoş geldiniz! Hesabınız yeniden aktif."
+    },
+    "admin": {
+      "user_updated": "Kullanıcı başarıyla güncellendi.",
+      "user_suspended": "Kullanıcı askıya alındı. Bir yönetici askıyı kaldırmadan giriş yapamaz.",
+      "user_unsuspended": "Askı kaldırıldı. Kullanıcı tekrar giriş yapabilir.",
+      "user_unlocked": "Hesabın kilidi açıldı. Kullanıcı tekrar giriş yapabilir.",
+      "user_deleted": "Kullanıcı kalıcı olarak silindi.",
+      "password_changed": "Kullanıcının şifresi sıfırlandı. Kendisine e-posta ile bildirildi; yeniden erişim için 'Şifremi Unuttum' akışını kullanması gerekiyor.",
+      "created": "Admin hesabı oluşturuldu.",
+      "account_deleted": "Admin hesabı silindi.",
+      "superadmin_promoted": "Admin superadmin yapıldı.",
+      "superadmin_demoted": "Superadmin admin'e düşürüldü.",
+      "permissions_updated": "İzinler güncellendi.",
+      "root_transfer_initiated": "Doğrulama kodu e-postanıza gönderildi.",
+      "root_transferred": "Ana superadminlik devredildi."
+    },
+    "rbac": {
+      "role_deleted": "Rol silindi.",
+      "permission_set_deleted": "İzin seti silindi."
+    },
+    "notification": {
+      "read": "Bildirim okundu olarak işaretlendi.",
+      "all_read": "Tüm bildirimler okundu olarak işaretlendi."
+    },
+    "session": {
+      "revoked": "Oturum sonlandırıldı.",
+      "others_revoked": "Diğer tüm cihazlardan çıkış yapıldı.",
+      "admin_revoked": "Kullanıcının tüm oturumları sonlandırıldı."
+    },
+    "support": {
+      "ticket_created": "Destek talebiniz oluşturuldu.",
+      "ticket_closed": "Talep kapatıldı.",
+      "message_sent": "Mesaj gönderildi.",
+      "admin_ticket_updated": "Talep güncellendi.",
+      "admin_ticket_replied": "Yanıt gönderildi."
+    },
+    "announcement": {
+      "sent": "Duyuru gönderildi."
+    },
+    "settings": {
+      "updated": "Ayarlar kaydedildi."
+    }
+  }
+}

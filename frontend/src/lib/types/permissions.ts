@@ -1,0 +1,40 @@
+// RBAC permission keys (resource:action), mirrored 1:1 with the backend
+// `Permission` enum. Superadmins implicitly hold every permission; plain admins
+// hold the subset granted to them and delivered on `/users/me`. Keep this file
+// the single source of truth for permission keys on the client.
+export enum Permission {
+  UsersRead = "users:read",
+  UsersWrite = "users:write",
+  UsersDelete = "users:delete",
+  UsersSuspend = "users:suspend",
+  UsersPasswordReset = "users:password_reset",
+  UsersSessions = "users:sessions",
+  UsersUnlock = "users:unlock",
+  UsersMfaReset = "users:mfa_reset",
+  FilesRead = "files:read",
+  FilesDelete = "files:delete",
+  SupportRead = "support:read",
+  SupportWrite = "support:write",
+  SupportUpdate = "support:update",
+  ActivitiesRead = "activities:read",
+  StatsRead = "stats:read",
+  BroadcastRead = "broadcast:read",
+  BroadcastWrite = "broadcast:write",
+  SystemSettingsRead = "system_settings:read",
+  SystemSettingsWrite = "system_settings:write",
+  RolesRead = "roles:read",
+  RolesWrite = "roles:write",
+  PermissionSetsRead = "permission_sets:read",
+  PermissionSetsWrite = "permission_sets:write",
+  AdminsRead = "admins:read",
+  AdminsWrite = "admins:write",
+  AdminsDelete = "admins:delete",
+  // Self-service keys: granted through roles only, never in the direct grid.
+  SelfProfileUpdate = "self.profile:update",
+  SelfFilesUpload = "self.files:upload",
+  SelfNotificationsRead = "self.notifications:read",
+  SelfSupportRead = "self.support:read",
+  SelfSupportCreate = "self.support:create",
+  SelfSupportReply = "self.support:reply",
+  SelfSupportClose = "self.support:close",
+}

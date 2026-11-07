@@ -1,0 +1,97 @@
+{
+  "fillAllFields": "Lütfen tüm alanları doldurun.",
+  "loginFailed": "Giriş başarısız. Lütfen bilgilerinizi kontrol edin.",
+  "genericError": "Giriş yapılırken bir hata oluştu.",
+  "registrationFailed": "Kayıt işlemi başarısız. Lütfen tekrar deneyin.",
+  "VALIDATION_ERROR": "Doğrulama Hatası",
+  "INTERNAL_SERVER_ERROR": "Sunucu Hatası",
+  "RESOURCE_NOT_FOUND": "Kaynak Bulunamadı",
+  "INVALID_TOKEN": "Geçersiz veya süresi dolmuş token",
+  "INSUFFICIENT_PERMISSIONS": "Yetersiz İzin",
+  "RESOURCE_CONFLICT": "Kaynak Çakışması",
+  "RATE_LIMIT_EXCEEDED": "İstek Sınırı Aşıldı",
+  "error": {
+    "user": {
+      "role_invalid": "Belirtilen rol geçersiz.",
+      "not_found": "Kullanıcı bulunamadı.",
+      "email_exists": "Bu e-posta adresi zaten kullanımda.",
+      "invalid_credentials": "Geçersiz e-posta veya şifre.",
+      "invalid_password": "Geçersiz şifre.",
+      "user_inactive": "Kullanıcı hesabı aktif değil.",
+      "email_not_verified": "E-posta adresi doğrulanmadı.",
+      "invalid_verification_token": "Geçersiz doğrulama token'ı.",
+      "invalid_email_domain": "Bu e-posta alan adı posta alamıyor.",
+      "disposable_email_not_allowed": "Geçici e-posta adresleri kabul edilmez.",
+      "password_weak": "Parola en az bir büyük harf, bir küçük harf, bir rakam ve bir özel karakter içermelidir."
+    },
+    "auth": {
+      "refresh_token_missing": "Yenileme token'ı eksik.",
+      "invalid_current_password": "Mevcut şifre yanlış.",
+      "registration_disabled": "Kayıt işlemi şu anda kapalı."
+    },
+    "account": {
+      "already_deactivated": "Hesabınız zaten silinmek üzere planlanmış.",
+      "not_deactivated": "Hesabınız aktif — iptal edilecek bir işlem yok.",
+      "deletion_expired": "Bu hesabın bekleme süresi dolmuş.",
+      "suspended": "Hesabınız yönetici tarafından askıya alındı.",
+      "already_suspended": "Bu kullanıcı zaten askıda.",
+      "not_suspended": "Bu kullanıcı askıda değil.",
+      "locked": "Çok fazla başarısız giriş denemesi. Hesabınız geçici olarak kilitlendi. Lütfen daha sonra tekrar deneyin."
+    },
+    "admin": {
+      "cannot_modify_self": "Yöneticiler kendi hesaplarını bu panelden değiştiremez.",
+      "cannot_delete_self": "Yöneticiler kendilerini silemez.",
+      "cannot_demote_last_admin": "Son aktif yöneticinin rolünü düşüremezsiniz.",
+      "cannot_delete_last_admin": "Son aktif yöneticiyi silemezsiniz.",
+      "cannot_modify_superadmin": "Bir superadmin hesabını yalnızca superadmin değiştirebilir.",
+      "cannot_delete_last_superadmin": "Son aktif superadmin kaldırılamaz.",
+      "only_superadmin": "Bu işlem yalnızca superadmin'lere açıktır.",
+      "only_root_superadmin": "Bu işlem yalnızca ana (root) superadmin'e açıktır.",
+      "not_an_admin": "Bu kullanıcı admin değil.",
+      "not_a_superadmin": "Bu kullanıcı superadmin değil.",
+      "cannot_transfer_to_self": "Root yetkisini kendinize devredemezsiniz.",
+      "superadmin_role_immutable": "Bir superadmin'in rolü değiştirilemez."
+    },
+    "rbac": {
+      "role_not_found": "Rol bulunamadı.",
+      "permission_set_not_found": "İzin seti bulunamadı.",
+      "key_already_exists": "Bu anahtara sahip bir rol veya izin seti zaten var.",
+      "system_element": "Sistem rolleri ve izin setleri değiştirilemez veya silinemez.",
+      "role_in_use": "Bu rol hâlâ hesaplara atanmış durumda. Silmeden önce geri alın.",
+      "permission_set_in_use": "Bu izin seti hâlâ bir rol veya hesap tarafından kullanılıyor. Silmeden önce geri alın.",
+      "permission_audience_mismatch": "Kullanıcılara yönelik bir izin seti yalnızca self servis izinleri içerebilir.",
+      "set_audience_mismatch": "Bir rol yalnızca kendi hedef kitlesine ait izin setlerini içerebilir.",
+      "user_role_required": "Bir hesap en az bir kalıcı kullanıcı rolünü korumalıdır.",
+      "superadmin_target": "Superadmin tüm izinlere sahiptir: ona rol veya izin seti atanamaz.",
+      "admin_assignment_forbidden": "Bir kullanıcıya admin rolü veya izin seti atamak için admins:write izni gerekir.",
+      "duplicate_assignment": "Aynı rol veya izin seti birden fazla kez yer alıyor.",
+      "expiry_in_past": "Bitiş tarihi gelecekte olmalıdır.",
+      "self_permission_roles_only": "Self-servis izinleri yalnızca roller aracılığıyla verilebilir.",
+      "privilege_escalation": "Yalnızca kalıcı olarak sahip olduğunuz yetkileri verebilir veya geri alabilirsiniz. Geçici yetkiler aktarılamaz."
+    },
+    "notification": {
+      "not_found": "Bildirim bulunamadı.",
+      "access_denied": "Bu bildirime erişiminiz yok."
+    },
+    "session": {
+      "not_found": "Oturum bulunamadı."
+    },
+    "support": {
+      "ticket_not_found": "Talep bulunamadı.",
+      "ticket_access_denied": "Bu talebe erişiminiz yok.",
+      "ticket_already_closed": "Bu talep kapatıldı ve yeni yanıt alamaz.",
+      "attachment_not_found": "Eklenen bir dosya bulunamadı.",
+      "attachment_not_owned": "Yalnızca kendi yüklediğiniz dosyaları ekleyebilirsiniz.",
+      "attachment_wrong_category": "Bu dosya destek eki olarak kullanılamaz.",
+      "invalid_assigned_admin": "Talepler yalnızca bir yöneticiye atanabilir.",
+      "disabled": "Destek şu anda kullanılamıyor."
+    },
+    "system": {
+      "maintenance": "Sistem bakımda. Lütfen kısa süre sonra tekrar deneyin."
+    },
+    "settings": {
+      "not_found": "Ayar bulunamadı.",
+      "invalid_value": "Bu ayar için geçersiz değer."
+    }
+  }
+}

@@ -1,0 +1,519 @@
+{
+  "login": {
+    "title": "Yönetici Girişi",
+    "subtitle": "Kısıtlı alan. Yalnızca yöneticiler.",
+    "cardTitle": "Yönetici olarak giriş yap",
+    "cardDescription": "Devam etmek için yönetici bilgilerinizi girin.",
+    "emailLabel": "Kurumsal e-posta",
+    "passwordLabel": "Şifre",
+    "submitButton": "Giriş Yap",
+    "submitting": "Giriş yapılıyor...",
+    "backToApp": "Ana uygulamaya dön"
+  },
+  "permissionDenied": {
+    "title": "Yetki gerekli",
+    "description": "Bu bölümü görüntüleme yetkiniz yok. Erişim için bir superadmin'den yetki isteyin."
+  },
+  "admins": {
+    "title": "Admin yönetimi",
+    "subtitle": "Admin oluşturun, izin atayın ve superadmin katmanını yönetin.",
+    "superadminBadge": "Superadmin · tam erişim",
+    "rootBadge": "Root",
+    "savePermissions": "İzinleri kaydet",
+    "managePermissions": "İzinleri yönet",
+    "permissionCount": "İzinler: {{count}}",
+    "empty": "Henüz admin yok.",
+    "loading": "Adminler yükleniyor...",
+    "columns": {
+      "admin": "Admin",
+      "role": "Rol",
+      "permissions": "Doğrudan izinler",
+      "created": "Oluşturulma",
+      "actions": "İşlemler"
+    },
+    "rowActions": {
+      "menu": "Satır işlemleri"
+    },
+    "modal": {
+      "title": "İzinler · {{email}}",
+      "cancel": "İptal"
+    },
+    "create": {
+      "action": "Admin oluştur",
+      "title": "Admin hesabı oluştur",
+      "accountSection": "Hesap bilgileri",
+      "emailLabel": "E-posta",
+      "emailPlaceholder": "admin@ornek.com",
+      "firstNameLabel": "Ad",
+      "lastNameLabel": "Soyad",
+      "passwordLabel": "Parola",
+      "passwordPlaceholder": "En az 8 karakter",
+      "permissionsLabel": "İzinler",
+      "submit": "Admin oluştur",
+      "cancel": "İptal"
+    },
+    "delete": {
+      "action": "Hesabı sil",
+      "title": "Admin hesabını sil",
+      "description": "{{email}} kalıcı olarak silinsin ve tüm erişimi kaldırılsın mı? Bu işlem geri alınamaz.",
+      "confirm": "Hesabı sil",
+      "cancel": "İptal"
+    },
+    "promoteSuperadmin": {
+      "action": "Superadmin yap",
+      "title": "Superadmin'e yükselt",
+      "description": "{{email}} kullanıcısına tam superadmin erişimi verilsin mi? Tüm izinlere otomatik sahip olur.",
+      "confirm": "Superadmin yap",
+      "cancel": "İptal"
+    },
+    "demoteToAdmin": {
+      "action": "Admin'e düşür",
+      "title": "Admin'e düşür",
+      "description": "{{email}} izinsiz bir admin'e düşürülsün mü?",
+      "confirm": "Admin'e düşür",
+      "cancel": "İptal"
+    },
+    "transferRoot": {
+      "action": "Root'u devret",
+      "title": "Ana superadminliği devret",
+      "description": "Root yetkinizi başka bir superadmin'e devredin. E-posta adresinize bir doğrulama kodu gönderilecek.",
+      "targetLabel": "Yeni root (superadmin)",
+      "targetPlaceholder": "Bir superadmin seçin",
+      "send": "Kod gönder",
+      "sentNote": "Adresinize bir kod gönderdik. 3 dakika içinde aşağıya girin.",
+      "codeLabel": "Doğrulama kodu",
+      "codePlaceholder": "6 haneli kod",
+      "confirm": "Devri onayla",
+      "cancel": "İptal"
+    },
+    "directPermissionsHint": "Yalnızca doğrudan verilen izinler. Rollerle ve izin setleriyle gelen izinler sayılmaz: görmek için erişim panelini açın.",
+    "viewAccess": "Erişimi görüntüle"
+  },
+  "permissions": {
+    "selectAll": "Tümü",
+    "searchPlaceholder": "Bölüm ara...",
+    "noResults": "Eşleşen bölüm yok.",
+    "restricted": "Bu işlem için yetkiniz yok; gizlendi ve istek gönderilmez.",
+    "resource": {
+      "users": "Kullanıcılar",
+      "files": "Dosyalar",
+      "support": "Destek",
+      "activities": "Aktiviteler",
+      "stats": "İstatistikler",
+      "roles": "Roller",
+      "permission_sets": "İzin setleri",
+      "admins": "Yöneticiler",
+      "broadcast": "Duyurular",
+      "system_settings": "Sistem ayarları",
+      "self": {
+        "profile": "Profilim",
+        "files": "Dosyalarım",
+        "notifications": "Bildirimlerim",
+        "support": "Destek taleplerim"
+      }
+    },
+    "action": {
+      "read": "Görüntüle",
+      "write": "Düzenle",
+      "delete": "Sil",
+      "suspend": "Askıya al",
+      "password_reset": "Şifre sıfırla",
+      "sessions": "Oturumları yönet",
+      "unlock": "Hesap kilidini aç",
+      "mfa_reset": "MFA sıfırla",
+      "update": "Ata",
+      "upload": "Yükle",
+      "create": "Oluştur",
+      "reply": "Yanıtla",
+      "close": "Kapat"
+    }
+  },
+  "shell": {
+    "title": "Yönetim",
+    "brandSubtitle": "Admin Paneli",
+    "toggleSidebar": "Kenar çubuğunu aç/kapat",
+    "breadcrumb": "Gezinti yolu",
+    "section": {
+      "overview": "Genel Bakış",
+      "management": "Yönetim",
+      "monitoring": "İzleme",
+      "account": "Hesap",
+      "accessControl": "Erişim denetimi"
+    },
+    "nav": {
+      "dashboard": "Panel",
+      "users": "Kullanıcılar",
+      "admins": "Adminler",
+      "files": "Dosyalar",
+      "activities": "Aktivite günlüğü",
+      "support": "Destek",
+      "notifications": "Bildirimler",
+      "broadcasts": "Duyurular",
+      "system-settings": "Sistem Ayarları",
+      "profile": "Profil",
+      "roles": "Roller",
+      "permission-sets": "İzin setleri"
+    },
+    "signedInAs": "Giriş yapılan hesap",
+    "exit": "Yönetimden çık",
+    "forbiddenTitle": "Sadece yöneticiler",
+    "forbiddenDescription": "Giriş yaptınız, fakat bu alan için yönetici rolü gereklidir.",
+    "forbiddenCta": "Panele dön"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "subtitle": "Kullanıcılar ve son aktivitelere genel bakış.",
+    "stats": {
+      "totalUsers": "Toplam kullanıcı",
+      "activeUsers": "Aktif kullanıcı",
+      "admins": "Yönetici",
+      "activitiesToday": "Aktivite"
+    },
+    "recentActivity": "Son aktiviteler",
+    "viewAllActivity": "Tüm aktiviteleri gör",
+    "viewAllUsers": "Tüm kullanıcıları gör"
+  },
+  "users": {
+    "title": "Kullanıcılar",
+    "subtitle": "Tüm hesapları arayın, filtreleyin ve yönetin.",
+    "filters": {
+      "searchPlaceholder": "E-posta veya isme göre ara",
+      "role": "Rol",
+      "roleAny": "Tüm roller",
+      "status": "Durum",
+      "statusAny": "Tüm durumlar",
+      "statusActive": "Aktif",
+      "statusInactive": "Pasif",
+      "verified": "Doğrulanmış",
+      "verifiedAny": "Tümü",
+      "verifiedYes": "Doğrulanmış",
+      "verifiedNo": "Doğrulanmamış",
+      "reset": "Filtreleri temizle"
+    },
+    "columns": {
+      "user": "Kullanıcı",
+      "email": "E-posta",
+      "role": "Rol",
+      "status": "Durum",
+      "verified": "Doğrulanmış",
+      "created": "Oluşturuldu",
+      "actions": "İşlemler"
+    },
+    "status": {
+      "active": "Aktif",
+      "inactive": "Pasif",
+      "pendingDeletion": "Silinmek üzere",
+      "suspended": "Askıya alınmış"
+    },
+    "role": {
+      "superadmin": "Superadmin",
+      "admin": "Yönetici",
+      "user": "Kullanıcı"
+    },
+    "empty": "Seçili filtrelerle eşleşen kullanıcı yok.",
+    "loading": "Kullanıcılar yükleniyor...",
+    "pagination": {
+      "previous": "Önceki",
+      "next": "Sonraki",
+      "pageOf": "/ {{total}}",
+      "goToPage": "Sayfaya git",
+      "showing": "{{from}}–{{to}} / {{total}}",
+      "rowsPerPage": "Sayfa başına"
+    },
+    "rowActions": {
+      "open": "Detayları aç",
+      "menu": "Satır işlemleri",
+      "suspend": "Askıya al",
+      "unsuspend": "Askıyı kaldır",
+      "unlock": "Hesabın kilidini aç",
+      "changePassword": "Şifreyi sıfırla",
+      "delete": "Kullanıcıyı sil"
+    }
+  },
+  "userDetail": {
+    "backToUsers": "Kullanıcılara dön",
+    "avatarTitle": "Profil fotoğrafı",
+    "avatarDescription": "Bu kullanıcının avatarını yükleyin, değiştirin veya kaldırın.",
+    "avatarUploadRestricted": "Dosya yükleme izniniz olmadığı için fotoğraf değiştirilemez.",
+    "removeAvatarTitle": "Bu avatar kaldırılsın mı?",
+    "removeAvatarDescription": "Bu işlem fotoğrafı depolamadan kalıcı olarak siler ve kullanıcının avatarını temizler. Geri alınamaz.",
+    "removeAvatarConfirm": "Avatarı kaldır",
+    "overviewTitle": "Hesap özeti",
+    "overviewDescription": "Bu kullanıcıya ait temel bilgiler ve durum.",
+    "overview": {
+      "id": "ID",
+      "created": "Oluşturuldu",
+      "updated": "Güncellendi",
+      "deactivated": "Pasifleştirildi",
+      "scheduledDeletion": "Planlanmış silme",
+      "suspended": "Askıya alındı"
+    },
+    "editTitle": "Kullanıcıyı düzenle",
+    "editDescription": "Profil ve erişim bilgilerini güncelleyin.",
+    "activityTitle": "Son aktiviteler",
+    "activityDescription": "Bu kullanıcıya ait denetim olayları.",
+    "activityEmpty": "Son aktivite yok.",
+    "activityLoadMore": "Daha fazla göster",
+    "dangerTitle": "Tehlikeli işlemler",
+    "dangerDescription": "Bu işlemler denetlenir ve kullanıcı tarafından geri alınamaz.",
+    "sessions": {
+      "title": "Aktif oturumlar",
+      "description": "Bu kullanıcının giriş yapılmış cihazları.",
+      "deviceLabel": "{{browser}} — {{os}}",
+      "unknownDevice": "Bilinmeyen cihaz",
+      "lastActive": "Son aktivite: {{date}}",
+      "revokeAll": "Tüm oturumları sonlandır",
+      "loadMore": "Daha fazla göster",
+      "empty": "Aktif oturum yok.",
+      "confirm": {
+        "title": "Tüm oturumlar sonlandırılsın mı?",
+        "description": "Kullanıcı tüm cihazlarından anında çıkış yapacak ve yeniden giriş yapması gerekecek. Bu işlem denetlenir.",
+        "confirm": "Hepsini Sonlandır",
+        "cancel": "Vazgeç"
+      }
+    },
+    "fields": {
+      "firstName": "Ad",
+      "lastName": "Soyad",
+      "title": "Unvan",
+      "role": "Rol",
+      "active": "Aktif",
+      "verified": "E-posta doğrulanmış"
+    },
+    "save": "Değişiklikleri kaydet",
+    "saving": "Kaydediliyor...",
+    "cancel": "İptal",
+    "changePassword": "Şifreyi sıfırla",
+    "suspend": "Hesabı askıya al",
+    "unsuspend": "Askıyı kaldır",
+    "unlock": "Hesabın kilidini aç",
+    "delete": "Kullanıcıyı sil",
+    "deleting": "Siliniyor...",
+    "adminTargetRestricted": "Bir admin hesabını değiştirmek admins:write izni gerektirir; bu yüzden gizlendi ve istek gönderilmez."
+  },
+  "confirm": {
+    "deleteTitle": "Bu kullanıcı silinsin mi?",
+    "deleteDescription": "Bu işlem kullanıcıyı kalıcı olarak siler ve geri alınamaz.",
+    "deleteConfirm": "Kullanıcıyı sil",
+    "suspendTitle": "Bu kullanıcı askıya alınsın mı?",
+    "suspendDescription": "Kullanıcı erişimini anında kaybeder ve hesap, bir yönetici askıyı kaldırana kadar askıda kalır.",
+    "suspendConfirm": "Askıya al",
+    "unsuspendTitle": "Bu askı kaldırılsın mı?",
+    "unsuspendDescription": "Hesap yeniden etkinleşir ve kullanıcının erişimi geri yüklenir.",
+    "unsuspendConfirm": "Askıyı kaldır",
+    "unlockTitle": "Bu hesabın kilidi açılsın mı?",
+    "unlockDescription": "Başarısız giriş sayacı ve geçici kilit temizlenir; kullanıcı hemen yeniden giriş yapabilir.",
+    "unlockConfirm": "Kilidi aç",
+    "changePasswordTitle": "Şifre sıfırlansın mı?",
+    "changePasswordDescription": "Kullanıcının şifresi bilinmeyen bir değere döndürülür. Yeniden erişim için giriş sayfasındaki 'Şifremi Unuttum' bağlantısını kullanması gerekir. Yeni şifreyi siz görmezsiniz.",
+    "changePasswordConfirm": "Sıfırla",
+    "cancel": "İptal"
+  },
+  "files": {
+    "title": "Dosyalar",
+    "subtitle": "Yüklenen dosyaları inceleyin, filtreleyin ve silin.",
+    "filters": {
+      "uploaderPlaceholder": "Yükleyen adı veya e-postasına göre ara",
+      "type": "Tür",
+      "typeAny": "Tüm türler",
+      "reset": "Filtreleri temizle"
+    },
+    "columns": {
+      "file": "Dosya",
+      "type": "Tür",
+      "size": "Boyut",
+      "uploadedBy": "Yükleyen",
+      "created": "Oluşturulma",
+      "actions": "İşlemler"
+    },
+    "rowActions": {
+      "preview": "Önizle",
+      "delete": "Dosyayı sil"
+    },
+    "unnamed": "Adsız",
+    "empty": "Seçili filtrelerle eşleşen dosya yok.",
+    "loading": "Dosyalar yükleniyor...",
+    "confirmDelete": {
+      "title": "Bu dosya silinsin mi?",
+      "description": "Bu işlem dosyayı depolamadan kalıcı olarak siler. Bir kullanıcının profil fotoğrafıysa o avatar temizlenir. Bu işlem geri alınamaz.",
+      "confirm": "Dosyayı sil",
+      "cancel": "İptal"
+    }
+  },
+  "activities": {
+    "title": "Aktivite günlüğü",
+    "subtitle": "Platform genelinde denetlenen tüm olaylar.",
+    "refresh": "Yenile",
+    "filters": {
+      "type": "Tür",
+      "typeAny": "Tüm türler",
+      "resource": "Kaynak",
+      "resourceAny": "Tüm kaynaklar",
+      "status": "Durum",
+      "statusAny": "Tüm durumlar",
+      "statusCode": "Durum kodu",
+      "statusCodeAny": "Tüm kodlar",
+      "user": "Kullanıcı",
+      "userSearch": "İsim veya e-posta ara…",
+      "reset": "Filtreleri temizle"
+    },
+    "columns": {
+      "when": "Zaman",
+      "user": "Kullanıcı",
+      "type": "Tür",
+      "resource": "Kaynak",
+      "status": "Durum",
+      "statusCode": "Kod",
+      "details": "Detaylar"
+    },
+    "status": {
+      "success": "Başarılı",
+      "failure": "Başarısız"
+    },
+    "type": {
+      "create": "Oluştur",
+      "read": "Oku",
+      "update": "Güncelle",
+      "delete": "Sil",
+      "execute": "Çalıştır",
+      "login": "Giriş",
+      "logout": "Çıkış",
+      "export": "Dışa aktar",
+      "invite": "Davet"
+    },
+    "resource": {
+      "user": "Kullanıcı",
+      "auth": "Kimlik",
+      "file": "Dosya",
+      "support_ticket": "Destek talebi",
+      "system_settings": "Sistem ayarları",
+      "role": "Rol",
+      "permission_set": "İzin seti",
+      "announcement": "Duyuru"
+    },
+    "deletedAccount": "Silinmiş hesap",
+    "unknownAccount": "Bilinmeyen hesap",
+    "empty": "Seçili filtrelerle eşleşen aktivite yok.",
+    "loading": "Aktiviteler yükleniyor..."
+  },
+  "rbac": {
+    "audience": {
+      "label": "Hedef kitle",
+      "user": "Kullanıcılar",
+      "admin": "Yöneticiler"
+    },
+    "audienceHint": {
+      "user": "Normal hesaplar için: yalnızca kendi hesabına yönelik izinler.",
+      "admin": "Yönetim paneli hesapları için: her izin."
+    },
+    "system": "Sistem",
+    "systemReadOnly": "Sistem öğeleri değiştirilemez veya silinemez.",
+    "cancel": "İptal",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor...",
+    "create": "Oluştur",
+    "close": "Kapat",
+    "edit": "Düzenle",
+    "view": "Görüntüle",
+    "delete": "Sil",
+    "rowActions": "Satır işlemleri",
+    "fields": {
+      "key": "Anahtar",
+      "keyHint": "Küçük harf, rakam ve alt çizgi; parçalar nokta ile ayrılır. Oluşturulduktan sonra değişmez.",
+      "name": "Ad",
+      "description": "Açıklama"
+    },
+    "validation": {
+      "keyInvalid": "Harfle başlayan küçük harf, rakam ve alt çizgi kullanın.",
+      "nameRequired": "Ad zorunludur."
+    },
+    "roles": {
+      "title": "Roller",
+      "subtitle": "Rol, izin setlerini bir araya getirir ve hesaplara atanır.",
+      "create": "Rol oluştur",
+      "createTitle": "Rol oluştur",
+      "editTitle": "Rolü düzenle · {{name}}",
+      "viewTitle": "Rol · {{name}}",
+      "loading": "Roller yükleniyor...",
+      "empty": "Henüz rol yok.",
+      "columns": {
+        "role": "Rol",
+        "audience": "Hedef kitle",
+        "sets": "İzin setleri",
+        "actions": "İşlemler"
+      },
+      "setsLabel": "İzin setleri",
+      "noSets": "Yok",
+      "noSetsAvailable": "Bu hedef kitle için henüz izin seti yok.",
+      "delete": {
+        "title": "Rolü sil",
+        "description": "{{name}} rolü silinsin mi? Bu işlem geri alınamaz.",
+        "confirm": "Rolü sil"
+      }
+    },
+    "sets": {
+      "title": "İzin setleri",
+      "subtitle": "İzin seti, rollerin içerdiği adlandırılmış bir izin grubudur.",
+      "create": "İzin seti oluştur",
+      "createTitle": "İzin seti oluştur",
+      "editTitle": "İzin setini düzenle · {{name}}",
+      "viewTitle": "İzin seti · {{name}}",
+      "loading": "İzin setleri yükleniyor...",
+      "empty": "Henüz izin seti yok.",
+      "columns": {
+        "set": "İzin seti",
+        "audience": "Hedef kitle",
+        "permissions": "İzinler",
+        "actions": "İşlemler"
+      },
+      "permissionsLabel": "İzinler",
+      "permissionCount": "{{count}} izin",
+      "delete": {
+        "title": "İzin setini sil",
+        "description": "{{name}} izin seti silinsin mi? Bu işlem geri alınamaz.",
+        "confirm": "İzin setini sil"
+      }
+    },
+    "access": {
+      "title": "Erişim",
+      "description": "Bu hesabın sahip olduğu roller, izin setleri ve izinler ile her birinin kaynağı.",
+      "loading": "Erişim yükleniyor...",
+      "roles": "Roller",
+      "permissionSets": "İzin setleri",
+      "directPermissions": "Doğrudan izinler",
+      "directHint": "Doğrudan izinler Admin yönetimi sayfasında düzenlenir.",
+      "openAdmins": "Admin yönetimini aç",
+      "none": "Yok",
+      "expires": "Bitiş: {{date}}",
+      "expired": "Süresi doldu",
+      "effective": "Geçerli izinler",
+      "effectiveEmpty": "Bu hesabın hiçbir izni yok.",
+      "source": {
+        "role": "Rol",
+        "permission_set": "İzin seti",
+        "direct": "Doğrudan verilen",
+        "superadmin": "Superadmin katmanı"
+      },
+      "manageRoles": "Rolleri yönet",
+      "manageSets": "İzin setlerini yönet",
+      "superadminNote": "Superadmin, katmanı gereği her izne sahiptir. Ona rol veya izin seti atanamaz.",
+      "selfNote": "Kendi erişiminizi değiştiremezsiniz.",
+      "forbiddenNote": "Bir admin hesabının erişimini görmek admins:read izni gerektirir.",
+      "assign": {
+        "rolesTitle": "Roller · {{email}}",
+        "setsTitle": "İzin setleri · {{email}}",
+        "expiresLabel": "Bitiş zamanı",
+        "expiresHint": "Süresiz için boş bırakın.",
+        "noOptions": "Atanacak bir şey yok.",
+        "promoteWarning": "Bir admin rolü veya izin seti atamak, bu hesaba yönetim paneli erişimi verir.",
+        "listError": "Liste yüklenemedi, bu nedenle atamalar şu anda değiştirilemez.",
+        "demoteWarning": "Geriye admin rolü, izin seti veya doğrudan izin kalmazsa bu hesap yönetim paneli erişimini kaybeder ve normal kullanıcı olur.",
+        "userRoleRequired": "En az bir süresiz kullanıcı rolü kalmalı.",
+        "save": "Atamaları kaydet",
+        "expiredBadge": "Süresi doldu"
+      }
+    },
+    "genericError": "İstek başarısız oldu. Değerleri kontrol edip tekrar deneyin.",
+    "catalogError": "İzin listesi yüklenemedi; şu anda izinler düzenlenemez."
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "home": {
+    "title": "Manage Your Daily Tasks",
+    "description": "The best platform to manage your daily tasks and projects. Fast, secure, and stylish."
+  },
+  "about": {
+    "title": "About Us",
+    "description": "Who we are, why this project exists, and the values we build with."
+  },
+  "login": {
+    "title": "Login",
+    "description": "Login to your NextJS Template account to access your dashboard and projects."
+  },
+  "register": {
+    "title": "Create Account",
+    "description": "Sign up and start managing your projects for free. Quick registration, no credit card required."
+  },
+  "forgotPassword": {
+    "title": "Forgot Password",
+    "description": "Enter your email address and we will send you a link to reset your password."
+  },
+  "resetPassword": {
+    "title": "Reset Password",
+    "description": "Set a new and secure password for your NextJS Template account."
+  },
+  "verifyEmail": {
+    "title": "Verify Email",
+    "description": "Please verify your email address to complete your registration."
+  },
+  "verifyEmailNotice": {
+    "title": "Check Your Email",
+    "description": "We have sent you a verification link. Please check your inbox and spam folder."
+  },
+  "accountSuspended": {
+    "title": "Account Suspended",
+    "description": "This account has been suspended by an administrator."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "Manage your projects, tasks, and team from your personal dashboard."
+  },
+  "profile": {
+    "title": "Profile",
+    "description": "View and edit your personal profile, preferences, and account settings."
+  },
+  "support": {
+    "title": "Support",
+    "description": "Open a support ticket and chat with our team about any issue."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "View all your notifications and manage their read status."
+  },
+  "adminLogin": {
+    "title": "Admin Sign In",
+    "description": "Sign in to the administration area to manage users and view activity."
+  },
+  "adminDashboard": {
+    "title": "Admin Dashboard",
+    "description": "Administrative overview of users, activity, and system health."
+  },
+  "adminUsers": {
+    "title": "User Management",
+    "description": "Search, filter, update, and deactivate user accounts."
+  },
+  "adminUserDetail": {
+    "title": "User Details",
+    "description": "Edit a user, manage their status, and review their activity log."
+  },
+  "adminAdmins": {
+    "title": "Admin Management",
+    "description": "Promote admins, assign permissions, and revoke admin access."
+  },
+  "adminRoles": {
+    "title": "Roles",
+    "description": "Create roles from permission sets and review what each one gives."
+  },
+  "adminPermissionSets": {
+    "title": "Permission Sets",
+    "description": "Group permissions into sets that roles and accounts can hold."
+  },
+  "adminFiles": {
+    "title": "File Management",
+    "description": "Review, filter, and delete uploaded files across the platform."
+  },
+  "adminActivities": {
+    "title": "Activity Log",
+    "description": "Browse audit events across all users."
+  },
+  "adminSupport": {
+    "title": "Support Queue",
+    "description": "Review and respond to user support tickets."
+  },
+  "adminNotifications": {
+    "title": "Notifications",
+    "description": "View all your notifications and manage their read status."
+  },
+  "adminBroadcasts": {
+    "title": "Announcements",
+    "description": "Compose and send announcements to your users."
+  },
+  "adminSystemSettings": {
+    "title": "System Settings",
+    "description": "Configure site-wide settings, branding, and feature toggles."
+  },
+  "adminTicketDetail": {
+    "title": "Ticket",
+    "description": "View a support ticket, reply, and update its status."
+  },
+  "notFound": {
+    "title": "Page Not Found",
+    "description": "The page you are looking for does not exist or may have been moved."
+  },
+  "error": {
+    "title": "An Error Occurred",
+    "description": "An unexpected error occurred. Please try again or contact support."
+  }
+}

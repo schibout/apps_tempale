@@ -1,0 +1,118 @@
+{
+  "home": {
+    "title": "Günlük Görevlerinizi Yönetin",
+    "description": "Günlük görevlerinizi ve projelerinizi yönetmek için en iyi platform. Hızlı, güvenli ve şık."
+  },
+  "about": {
+    "title": "Hakkımızda",
+    "description": "Biz kimiz, bu proje neden var ve hangi değerlerle inşa ediyoruz."
+  },
+  "login": {
+    "title": "Giriş Yap",
+    "description": "Dashboard'unuza ve projelerinize erişmek için NextJS Template hesabınıza giriş yapın."
+  },
+  "register": {
+    "title": "Hesap Oluştur",
+    "description": "Üye olun ve projelerinizi ücretsiz yönetmeye başlayın. Hızlı kayıt, kredi kartı gerekmez."
+  },
+  "forgotPassword": {
+    "title": "Şifremi Unuttum",
+    "description": "E-posta adresinizi girin, şifrenizi sıfırlamanız için bir bağlantı gönderelim."
+  },
+  "resetPassword": {
+    "title": "Şifre Sıfırla",
+    "description": "NextJS Template hesabınız için yeni ve güvenli bir şifre belirleyin."
+  },
+  "verifyEmail": {
+    "title": "E-postayı Doğrula",
+    "description": "Kaydınızı tamamlamak için lütfen e-posta adresinizi doğrulayın."
+  },
+  "verifyEmailNotice": {
+    "title": "E-postanızı Kontrol Edin",
+    "description": "Size bir doğrulama bağlantısı gönderdik. Lütfen gelen kutunuzu ve spam klasörünü kontrol edin."
+  },
+  "accountSuspended": {
+    "title": "Hesap Askıya Alındı",
+    "description": "Bu hesap yönetici tarafından askıya alındı."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "Kişisel dashboard'unuzdan projelerinizi, görevlerinizi ve ekibinizi yönetin."
+  },
+  "profile": {
+    "title": "Profil Ayarları",
+    "description": "Kişisel profilinizi, tercihlerinizi ve hesap ayarlarınızı görüntüleyin ve düzenleyin."
+  },
+  "support": {
+    "title": "Destek",
+    "description": "Destek talebi açın ve her konuda ekibimizle yazışın."
+  },
+  "notifications": {
+    "title": "Bildirimler",
+    "description": "Tüm bildirimlerinizi görüntüleyin ve okunma durumlarını yönetin."
+  },
+  "adminLogin": {
+    "title": "Yönetici Girişi",
+    "description": "Kullanıcıları yönetmek ve aktiviteleri görüntülemek için yönetim paneline giriş yapın."
+  },
+  "adminDashboard": {
+    "title": "Yönetici Paneli",
+    "description": "Kullanıcılar, aktiviteler ve sistem durumuna dair yönetim özeti."
+  },
+  "adminUsers": {
+    "title": "Kullanıcı Yönetimi",
+    "description": "Kullanıcı hesaplarını arayın, filtreleyin, güncelleyin ve devre dışı bırakın."
+  },
+  "adminUserDetail": {
+    "title": "Kullanıcı Detayı",
+    "description": "Bir kullanıcıyı düzenleyin, durumunu yönetin ve aktivite geçmişini inceleyin."
+  },
+  "adminAdmins": {
+    "title": "Admin Yönetimi",
+    "description": "Admin atayın, izinleri yönetin ve admin erişimini kaldırın."
+  },
+  "adminRoles": {
+    "title": "Roller",
+    "description": "İzin setlerinden roller oluşturun ve her rolün ne verdiğini inceleyin."
+  },
+  "adminPermissionSets": {
+    "title": "İzin Setleri",
+    "description": "İzinleri rollerin ve hesapların taşıyabileceği setlerde toplayın."
+  },
+  "adminFiles": {
+    "title": "Dosya Yönetimi",
+    "description": "Platformdaki yüklenen dosyaları inceleyin, filtreleyin ve silin."
+  },
+  "adminActivities": {
+    "title": "Aktivite Günlüğü",
+    "description": "Tüm kullanıcılara ait denetim olaylarını görüntüleyin."
+  },
+  "adminSupport": {
+    "title": "Destek Kuyruğu",
+    "description": "Kullanıcı destek taleplerini inceleyin ve yanıtlayın."
+  },
+  "adminNotifications": {
+    "title": "Bildirimler",
+    "description": "Tüm bildirimlerinizi görüntüleyin ve okunma durumlarını yönetin."
+  },
+  "adminBroadcasts": {
+    "title": "Duyurular",
+    "description": "Kullanıcılarınıza duyuru oluşturun ve gönderin."
+  },
+  "adminSystemSettings": {
+    "title": "Sistem Ayarları",
+    "description": "Site genelindeki ayarları, markalamayı ve özellik anahtarlarını yönetin."
+  },
+  "adminTicketDetail": {
+    "title": "Talep",
+    "description": "Bir destek talebini görüntüleyin, yanıtlayın ve durumunu güncelleyin."
+  },
+  "notFound": {
+    "title": "Sayfa Bulunamadı",
+    "description": "Aradığınız sayfa mevcut değil veya taşınmış olabilir."
+  },
+  "error": {
+    "title": "Bir Hata Oluştu",
+    "description": "Beklenmedik bir hata oluştu. Lütfen tekrar deneyin veya destek ile iletişime geçin."
+  }
+}
