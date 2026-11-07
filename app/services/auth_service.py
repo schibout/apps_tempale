@@ -64,6 +64,7 @@ from app.use_cases.auth_session import (
 )
 from app.use_cases.log_activity import log_activity
 from app.use_cases.settings import get_bool
+from app.use_cases.user_me import build_user_me
 from app.utils.email_templates import (
     generate_email_verification_email,
     generate_password_reset_email,
@@ -313,7 +314,7 @@ async def login_service(
     return AuthTokens(
         access_token=access_token,
         refresh_token=refresh_token,
-        user=UserPublic.model_validate(user),
+        user=await build_user_me(session, user),
         message=SuccessMessages.LOGIN_SUCCESS,
     )
 

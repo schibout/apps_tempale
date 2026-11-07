@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.user import UserPublic
+from app.schemas.user import UserMe
 
 # Longer than any TOTP or recovery code plus stray whitespace.
 _MFA_CODE_MAX_LENGTH = 64
@@ -32,6 +32,6 @@ class MfaEnrollStartResponse(BaseModel):
 class MfaEnrollConfirmResponse(BaseModel):
     """Enrollment result; the recovery codes are shown this one time only."""
 
-    user: UserPublic
+    user: UserMe
     recovery_codes: list[str]
     message: str | None = None

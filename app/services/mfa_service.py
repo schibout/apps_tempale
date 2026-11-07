@@ -45,10 +45,10 @@ from app.repositories.user_mfa import (
 )
 from app.schemas.mfa import MfaEnrollStartResponse
 from app.schemas.token import AuthTokens
-from app.schemas.user import UserPublic
 from app.schemas.user_activity import ActivityStatus, ActivityType, ResourceType
 from app.use_cases.auth_session import notify_account_locked, open_session
 from app.use_cases.log_activity import log_activity
+from app.use_cases.user_me import build_user_me
 from app.utils import utc_now
 
 METHOD_TOTP = "totp"
@@ -228,7 +228,7 @@ async def _complete_login(
     return AuthTokens(
         access_token=access_token,
         refresh_token=refresh_token,
-        user=UserPublic.model_validate(user),
+        user=await build_user_me(session, user),
         message=SuccessMessages.LOGIN_SUCCESS,
     )
 

@@ -7,7 +7,7 @@ production ones.
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -1060,3 +1060,87 @@ async def test_runtime_error_on_an_open_socket_still_surfaces():
     with pytest.raises(RuntimeError, match="boom"):
         await serve_account_socket(BrokenSocket(), topic="broken")
     assert "broken" not in realtime.manager._topics
+
+
+# --- Responses the frontend stores as its current user ----------------------
+
+
+async def _regular_account(http: AsyncClient) -> str:
+    """Create a verified plain account."""
+    email = "payload-user@test.com"
+    await register_and_verify(http, email)
+    return email
+
+
+async def _admin_account(http: AsyncClient) -> str:
+    """Create a verified admin holding one direct grant."""
+    email = "payload-admin@test.com"
+    await register_and_verify(http, email)
+    await promote_to_admin(email)
+    await grant_permissions(email, [Permission.STATS_READ])
+    return email
+
+
+@pytest.mark.parametrize(
+    ("make_account", "expected_key"),
+    [
+        (_regular_account, Permission.SELF_PROFILE_UPDATE),
+        (_admin_account, Permission.STATS_READ),
+    ],
+    ids=["regular", "admin"],
+)
+async def test_login_response_lists_the_permissions_of_users_me(
+    client: AsyncClient,
+    make_account: Callable[[AsyncClient], Awaitable[str]],
+    expected_key: Permission,
+):
+    """The login response is the ``/users/me`` payload: no second fetch is needed."""
+    email = await make_account(client)
+
+    response = await client.post(
+        "/auth/login", data={"username": email, "password": "Password123!"}
+    )
+
+    assert response.status_code == 200, response.text
+    user = response.json()["user"]
+    assert expected_key.value in user["permissions"]
+    assert user == (await client.get("/users/me")).json()
+
+
+async def test_login_response_omits_permissions_for_a_superadmin(client: AsyncClient):
+    """A superadmin holds every key by role, so the field stays out of the login."""
+    email = "payload-root@test.com"
+    await register_and_verify(client, email)
+    await promote_to_superadmin(email)
+
+    response = await client.post(
+        "/auth/login", data={"username": email, "password": "Password123!"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert "permissions" not in response.json()["user"]
+
+
+@pytest.mark.parametrize(
+    ("make_account", "expected_key"),
+    [
+        (_regular_account, Permission.SELF_PROFILE_UPDATE),
+        (_admin_account, Permission.STATS_READ),
+    ],
+    ids=["regular", "admin"],
+)
+async def test_profile_update_response_lists_the_permissions_of_users_me(
+    client: AsyncClient,
+    make_account: Callable[[AsyncClient], Awaitable[str]],
+    expected_key: Permission,
+):
+    """``PATCH /users/me`` answers with the ``/users/me`` payload."""
+    await login(client, await make_account(client))
+
+    response = await client.patch("/users/me", json={"first_name": "Renamed"})
+
+    assert response.status_code == 200, response.text
+    user = response.json()["user"]
+    assert user["first_name"] == "Renamed"
+    assert expected_key.value in user["permissions"]
+    assert user == (await client.get("/users/me")).json()

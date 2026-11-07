@@ -26,36 +26,23 @@ from app.repositories.user import (
 from app.schemas.msg import Message
 from app.schemas.user import (
     Language,
-    SystemRole,
     UserCreate,
     UserMe,
-    UserPublic,
     UsersPublic,
     UserUpdate,
     UserUpdateMe,
 )
 from app.schemas.user_activity import ActivityStatus, ActivityType, ResourceType
 from app.use_cases.log_activity import log_activity
-from app.use_cases.permissions import get_usable_permissions
+from app.use_cases.user_me import build_user_me
 from app.utils.email_templates import generate_account_deactivation_email
 
 logger = logging.getLogger(__name__)
 
 
 async def build_user_me_service(session: AsyncSession, user: User) -> UserMe:
-    """Assemble the ``/users/me`` payload, attaching the account's permissions.
-
-    Every account carries the keys it can actually use, except superadmins: they
-    bypass every check by role alone, so the field is omitted for them.
-    """
-    # Validate through UserPublic first: ``UserMe.model_validate(user)`` would
-    # try to read the ORM ``permissions`` relationship (lazy + async) during
-    # validation and raise MissingGreenlet. UserPublic has no such field, so it
-    # is safe; the permission list is then attached explicitly.
-    me = UserMe.model_validate(UserPublic.model_validate(user).model_dump())
-    if user.role != SystemRole.SUPERADMIN.value:
-        me.permissions = await get_usable_permissions(session, user)
-    return me
+    """Return the ``/users/me`` payload of the account."""
+    return await build_user_me(session, user)
 
 
 async def deactivate_own_account_service(
@@ -292,7 +279,7 @@ async def update_user_service(
     current_user: User,
     user_id: uuid.UUID,
     user_update: UserUpdate | UserUpdateMe,
-) -> UserPublic:
+) -> UserMe:
     """Update user information including password hashing if provided."""
     db_user = await get_user_service(session, user_id)
 
@@ -339,7 +326,7 @@ async def update_user_service(
     ):
         await _cleanup_old_avatar(session, old_avatar_file_id)
 
-    # Load the avatar relationship so UserPublic can serialize it.
+    # Load the avatar relationship so the payload can serialize it.
     await session.refresh(updated_user, attribute_names=["avatar_file"])
 
     await log_activity(
@@ -352,4 +339,4 @@ async def update_user_service(
         request=request,
     )
 
-    return UserPublic.model_validate(updated_user)
+    return await build_user_me(session, updated_user)

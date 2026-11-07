@@ -1112,3 +1112,66 @@ async def test_cli_refuses_anyone_but_the_root_superadmin(
 
     assert exit_code == 1
     assert await mfa_row("other@test.com") is not None
+
+
+# ---------------------------------------------------------------------------
+# The session-opening responses carry the /users/me payload
+# ---------------------------------------------------------------------------
+
+
+def assert_lists_admin_keys(user: dict) -> None:
+    """Assert a response's user holds the keys granted by ``create_admin``."""
+    assert {Permission.USERS_READ.value, Permission.SUPPORT_READ.value} <= set(
+        user["permissions"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_verify_response_lists_the_permissions_of_users_me(client: AsyncClient):
+    """Finishing a login with a TOTP code returns the ``/users/me`` payload."""
+    await create_admin(client, "admin@test.com")
+    secret, _ = await enroll("admin@test.com")
+    await post_login(client, "admin@test.com")
+
+    response = await client.post("/auth/mfa/verify", json={"code": totp_code(secret)})
+
+    assert response.status_code == 200, response.text
+    user = response.json()["user"]
+    assert_lists_admin_keys(user)
+    assert user == (await client.get("/users/me")).json()
+
+
+@pytest.mark.asyncio
+async def test_recovery_response_lists_the_permissions_of_users_me(
+    client: AsyncClient,
+):
+    """Finishing a login with a recovery code returns the ``/users/me`` payload."""
+    await create_admin(client, "admin@test.com")
+    _, codes = await enroll("admin@test.com")
+    await post_login(client, "admin@test.com")
+
+    response = await client.post("/auth/mfa/recovery", json={"code": codes[0]})
+
+    assert response.status_code == 200, response.text
+    user = response.json()["user"]
+    assert_lists_admin_keys(user)
+    assert user == (await client.get("/users/me")).json()
+
+
+@pytest.mark.asyncio
+async def test_enroll_confirm_response_lists_the_permissions_of_users_me(
+    client: AsyncClient,
+):
+    """Confirming an enrollment returns the ``/users/me`` payload."""
+    await create_admin(client, "admin@test.com")
+    await post_login(client, "admin@test.com")
+    started = await client.post("/auth/mfa/enroll/start")
+
+    response = await client.post(
+        "/auth/mfa/enroll/confirm", json={"code": totp_code(started.json()["secret"])}
+    )
+
+    assert response.status_code == 200, response.text
+    user = response.json()["user"]
+    assert_lists_admin_keys(user)
+    assert user == (await client.get("/users/me")).json()

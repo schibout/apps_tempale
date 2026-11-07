@@ -159,7 +159,7 @@ class UserMe(UserPublic):
 
 
 class UserUpdateResponse(BaseModel):
-    user: UserPublic
+    user: UserMe
     message: str
 
 

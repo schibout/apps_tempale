@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.schemas.user import UserPublic
+from app.schemas.user import UserMe
 
 
 # JSON payload containing access token
@@ -12,7 +12,7 @@ class Token(BaseModel):
 
 class AuthTokens(Token):
     refresh_token: str
-    user: UserPublic
+    user: UserMe
     message: str | None = None
 
 
@@ -26,7 +26,7 @@ class CookieLoginResponse(BaseModel):
     """Login response without access_token in body (token is in HttpOnly cookie)."""
 
     token_type: str = "bearer"
-    user: UserPublic
+    user: UserMe
     message: str | None = None
 
 
